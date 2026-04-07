@@ -1,0 +1,5 @@
+build_wasm/
+build_native/
+fmm2d.wasm
+fmm2d.so
+fmm2d.dylib
