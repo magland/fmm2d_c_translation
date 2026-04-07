@@ -18,6 +18,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FMM2D_SRC="${FMM2D_SRC:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 
+# Make sure both Homebrew prefixes are on PATH. CI runners often start
+# with neither: /opt/homebrew/bin is the ARM brew location and
+# /usr/local/bin is the Intel brew location.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 # Detect platform.
 case "$(uname -s)" in
   Linux*)  EXT="so";    SHARED_FLAGS="-shared -fPIC" ;;
@@ -25,8 +30,26 @@ case "$(uname -s)" in
   *)       echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
 esac
 
+# Locate gfortran. GitHub Actions macOS runners ship gcc/gfortran but
+# only as versioned binaries (gfortran-11..15) — there is no plain
+# `gfortran` symlink. Try the plain name first, then fall back to
+# versioned ones in newest-first order.
+FC=""
+for cand in gfortran gfortran-15 gfortran-14 gfortran-13 gfortran-12 gfortran-11; do
+  if command -v "$cand" >/dev/null 2>&1; then
+    FC="$cand"
+    break
+  fi
+done
+if [ -z "$FC" ]; then
+  echo "Error: no gfortran found on PATH (tried gfortran, gfortran-{11..15})." >&2
+  echo "PATH=$PATH" >&2
+  exit 1
+fi
+
 echo "fmm2d source: $FMM2D_SRC"
 echo "Output:       fmm2d.$EXT"
+echo "Fortran:      $FC ($(command -v "$FC"))"
 
 # Step 1: build the Fortran static library if it isn't already there.
 LIBFMM2D="$FMM2D_SRC/lib-static/libfmm2d.a"
@@ -34,9 +57,11 @@ if [ ! -f "$LIBFMM2D" ]; then
   echo "=== Building libfmm2d.a (Fortran) ==="
   pushd "$FMM2D_SRC" > /dev/null
 
-  # Generate a make.inc with -fPIC and OpenMP off (we serialize for numbl
-  # since the JS runtime is single-threaded anyway). Same recipe as the
-  # mip-core compile.m but without the matlab MEX bits.
+  # Generate a make.inc with -fPIC, OpenMP off, and the discovered FC.
+  # We serialize for numbl since the JS runtime is single-threaded
+  # anyway. The make.inc also pins FC so the makefile uses the
+  # versioned binary we found above (instead of the default `gfortran`,
+  # which may not exist).
   if [ "$EXT" = "dylib" ]; then
     LIBGFORTRAN_NAME="libgfortran.dylib"
   else
@@ -44,21 +69,20 @@ if [ ! -f "$LIBFMM2D" ]; then
   fi
 
   cat > make.inc <<EOF
-FDIR=\$(shell dirname \`gfortran --print-file-name $LIBGFORTRAN_NAME\`)
+FC=$FC
+CC=gcc
+FDIR=\$(shell dirname \`$FC --print-file-name $LIBGFORTRAN_NAME\`)
 MFLAGS+=-L\${FDIR}
 OMPFLAGS=
 OMPLIBS=
 FFLAGS=-fPIC -O3 -funroll-loops -std=legacy -w
 EOF
 
-  make lib OMP=OFF
+  make lib OMP=OFF FC="$FC"
   popd > /dev/null
 fi
 
-# Step 2: locate libgfortran for runtime linking.
-LIBGFORTRAN_DIR=$(dirname "$(gfortran --print-file-name=lib${EXT/dylib/dylib}gfortran.${EXT} 2>/dev/null || gfortran --print-file-name=libgfortran.${EXT})")
-
-# Step 3: compile the wrapper.
+# Step 2: compile the wrapper.
 BUILD_DIR="$SCRIPT_DIR/build_native"
 mkdir -p "$BUILD_DIR"
 WRAPPER_OBJ="$BUILD_DIR/rfmm2d_wrapper.o"
@@ -67,14 +91,27 @@ gcc -O3 -std=c99 -fPIC -fvisibility=hidden \
     -Wall -Wextra -Wno-unused-parameter \
     -c "$SCRIPT_DIR/rfmm2d_wrapper.c" -o "$WRAPPER_OBJ"
 
-# Step 4: link the shared library. The wrapper only references
-# rfmm2d_ndiv_ and hndiv2d_, but those routines pull in (transitively)
-# the rest of the rfmm2d call graph via cfmm2d_ndiv_, etc. — and ld
-# resolves all of those out of libfmm2d.a in the normal way, so
-# --whole-archive isn't needed. We DO want to hide the Fortran symbols
-# from the dynamic export table though, so the only public ABI of
-# fmm2d.so is rfmm2d_w. On Linux that's a version script; on macOS
-# it's an exported_symbols_list.
+# Step 3: link the shared library. We use $FC (gfortran) as the linker
+# driver, not gcc/g++, for two reasons:
+#
+#   1. gfortran knows where its own runtime libraries live (libgfortran,
+#      libquadmath, ...) and passes the right -L paths to ld
+#      automatically. On Ubuntu CI runners, libgfortran.so is only in
+#      the -dev package — only libgfortran.so.5 is installed by default
+#      — so a manual `-lgfortran` from gcc/g++ fails to resolve. Letting
+#      gfortran do the link sidesteps that entirely.
+#
+#   2. The upstream fmm2d makefile already builds libfmm2d.so with
+#      `gfortran -shared`, so this is the same path the existing native
+#      MEX build uses for its shared library.
+#
+# The wrapper only references rfmm2d_ndiv_ and hndiv2d_, but those
+# routines pull in (transitively) the rest of the rfmm2d call graph via
+# cfmm2d_ndiv_, etc. — and ld resolves all of those out of libfmm2d.a
+# in the normal way, so --whole-archive isn't needed. We DO want to
+# hide the Fortran symbols from the dynamic export table though, so the
+# only public ABI of fmm2d.{so,dylib} is rfmm2d_w. On Linux that's a
+# version script; on macOS it's an exported_symbols_list.
 echo "=== Linking fmm2d.$EXT ==="
 if [ "$EXT" = "so" ]; then
   VSCRIPT="$BUILD_DIR/fmm2d.ver"
@@ -88,12 +125,11 @@ else
   EXPORT_FLAGS="-Wl,-exported_symbols_list,$EXPORT_LIST"
 fi
 
-g++ $SHARED_FLAGS \
-    -fvisibility=hidden \
+"$FC" $SHARED_FLAGS \
     "$WRAPPER_OBJ" \
     "$LIBFMM2D" \
     $EXPORT_FLAGS \
-    -L"$LIBGFORTRAN_DIR" -lgfortran -lquadmath -lm \
+    -lm \
     -o "$SCRIPT_DIR/fmm2d.$EXT"
 
 echo "=== Built fmm2d.$EXT ($(wc -c < "$SCRIPT_DIR/fmm2d.$EXT") bytes) ==="
