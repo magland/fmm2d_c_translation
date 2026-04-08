@@ -70,6 +70,13 @@ FORT_SRC_pts_tree2d      = $(ROOT)/src/common/pts_tree2d.f
 FORT_SRC_cfmm2d          = $(ROOT)/src/laplace/cfmm2d.f
 FORT_SRC_cfmm2d_ndiv     = $(ROOT)/src/laplace/cfmm2d_ndiv.f
 FORT_SRC_rfmm2d_ndiv     = $(ROOT)/src/laplace/rfmm2d_ndiv.f
+FORT_SRC_lfmm2d_ndiv     = $(ROOT)/src/laplace/lfmm2d_ndiv.f
+FORT_SRC_bhndiv2d        = $(ROOT)/src/biharmonic/bhndiv2d.f
+FORT_SRC_bh2dterms       = $(ROOT)/src/biharmonic/bh2dterms.f
+FORT_SRC_bhkernels2d     = $(ROOT)/src/biharmonic/bhkernels2d.f
+FORT_SRC_bhrouts2d       = $(ROOT)/src/biharmonic/bhrouts2d.f
+FORT_SRC_bhfmm2d         = $(ROOT)/src/biharmonic/bhfmm2d.f
+FORT_SRC_stfmm2d         = $(ROOT)/src/stokes/stfmm2d.f
 
 # Each translated file is listed here as it gets added.
 C_SRCS  = $(wildcard $(SRCDIR)/*.c)
@@ -120,13 +127,37 @@ $(BUILD)/end2end_rfmm2d_ndiv: $(DROPIN_OBJS) $(FMMLIB) e2e/test_rfmm2d_e2e.f | $
 	    $(DROPIN_OBJS) $(TESTOBJS) $(FMMLIB) -lm \
 	    -o $@
 
-e2e: $(BUILD)/end2end_rfmm2d $(BUILD)/end2end_rfmm2d_ndiv
+$(BUILD)/end2end_cfmm2d_ndiv: $(DROPIN_OBJS) $(FMMLIB) e2e/test_cfmm2d_e2e.f | $(BUILD)
+	$(FC) -O3 -march=native -funroll-loops -std=legacy -w \
+	    e2e/test_cfmm2d_e2e.f \
+	    $(DROPIN_OBJS) $(TESTOBJS) $(FMMLIB) -lm \
+	    -o $@
+
+$(BUILD)/end2end_lfmm2d_ndiv: $(DROPIN_OBJS) $(FMMLIB) e2e/test_lfmm2d_e2e.f | $(BUILD)
+	$(FC) -O3 -march=native -funroll-loops -std=legacy -w \
+	    e2e/test_lfmm2d_e2e.f \
+	    $(DROPIN_OBJS) $(TESTOBJS) $(FMMLIB) -lm \
+	    -o $@
+
+$(BUILD)/end2end_stfmm2d: $(DROPIN_OBJS) $(FMMLIB) e2e/test_stfmm2d_e2e.f | $(BUILD)
+	$(FC) -O3 -march=native -funroll-loops -std=legacy -w \
+	    e2e/test_stfmm2d_e2e.f \
+	    $(DROPIN_OBJS) $(TESTOBJS) $(FMMLIB) -lm \
+	    -o $@
+
+e2e: $(BUILD)/end2end_rfmm2d $(BUILD)/end2end_rfmm2d_ndiv $(BUILD)/end2end_cfmm2d_ndiv $(BUILD)/end2end_lfmm2d_ndiv $(BUILD)/end2end_stfmm2d
 	@echo "==> $(BUILD)/end2end_rfmm2d (existing test_rfmm2d.f via C drop-in)"
 	@$(BUILD)/end2end_rfmm2d > $(BUILD)/end2end_rfmm2d.log 2>&1 \
 	    && echo "    PASS (output in $(BUILD)/end2end_rfmm2d.log)" \
 	    || (echo "    FAIL"; cat $(BUILD)/end2end_rfmm2d.log; exit 1)
-	@echo "==> $(BUILD)/end2end_rfmm2d_ndiv (matlab path smoke test)"
+	@echo "==> $(BUILD)/end2end_rfmm2d_ndiv (matlab rfmm2d smoke test)"
 	@$(BUILD)/end2end_rfmm2d_ndiv
+	@echo "==> $(BUILD)/end2end_cfmm2d_ndiv (matlab cfmm2d smoke test)"
+	@$(BUILD)/end2end_cfmm2d_ndiv
+	@echo "==> $(BUILD)/end2end_lfmm2d_ndiv (matlab lfmm2d smoke test)"
+	@$(BUILD)/end2end_lfmm2d_ndiv
+	@echo "==> $(BUILD)/end2end_stfmm2d (matlab stfmm2d smoke test)"
+	@$(BUILD)/end2end_stfmm2d
 
 # Compile a C source at the diff-test optimization level.
 $(BUILD)/%.o: $(SRCDIR)/%.c | $(BUILD)
@@ -157,6 +188,20 @@ $(BUILD)/cfmm2d_ref.o: $(FORT_SRC_cfmm2d) | $(BUILD)
 $(BUILD)/cfmm2d_ndiv_ref.o: $(FORT_SRC_cfmm2d_ndiv) | $(BUILD)
 	$(FC) $(FFLAGS_REF) -c $< -o $@
 $(BUILD)/rfmm2d_ndiv_ref.o: $(FORT_SRC_rfmm2d_ndiv) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/lfmm2d_ndiv_ref.o: $(FORT_SRC_lfmm2d_ndiv) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/bhndiv2d_ref.o: $(FORT_SRC_bhndiv2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/bh2dterms_ref.o: $(FORT_SRC_bh2dterms) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/bhkernels2d_ref.o: $(FORT_SRC_bhkernels2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/bhrouts2d_ref.o: $(FORT_SRC_bhrouts2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/bhfmm2d_ref.o: $(FORT_SRC_bhfmm2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/stfmm2d_ref.o: $(FORT_SRC_stfmm2d) | $(BUILD)
 	$(FC) $(FFLAGS_REF) -c $< -o $@
 
 .SECONDARY:

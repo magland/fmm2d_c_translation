@@ -22,12 +22,17 @@ provides.
 
 ## What's in `c_translation/`
 
-A C99 port of the subset of fmm2d needed to support the MATLAB entry
-point [`matlab/rfmm2d.m`](../matlab/rfmm2d.m) — the real-valued 2D
-Laplace Fast Multipole Method. The C library is a **drop-in replacement**
-for the corresponding Fortran objects: same symbol names, same calling
-convention, same numerical results within machine precision. The
-WASM build itself is not yet wired up, but every translated routine
+A C99 port of the subset of fmm2d needed to support four MATLAB entry
+points:
+
+- [`matlab/rfmm2d.m`](../matlab/rfmm2d.m) — real-valued 2D Laplace FMM
+- [`matlab/cfmm2d.m`](../matlab/cfmm2d.m) — complex Cauchy-kernel Laplace FMM
+- [`matlab/lfmm2d.m`](../matlab/lfmm2d.m) — log-kernel Laplace FMM with complex densities
+- [`matlab/stfmm2d.m`](../matlab/stfmm2d.m) — 2D Stokes FMM
+
+The C library is a **drop-in replacement** for the corresponding
+Fortran objects: same symbol names, same calling convention, same
+numerical results within machine precision. Every translated routine
 has been verified bit-for-bit against the Fortran original on x86 so
 that the C source is known-correct before it gets compiled to a new
 target.
@@ -37,11 +42,11 @@ points, adding routines), see [TRANSLATION_GUIDE.md](TRANSLATION_GUIDE.md).
 
 ## Status
 
-11 of the original Fortran source files have been translated. Every
+17 of the original Fortran source files have been translated. Every
 translated routine has been verified against its Fortran original with
 a bit-for-bit differential test, and the assembled C library has been
-verified end-to-end against `test/laplace/test_rfmm2d.f` and a custom
-matlab-path smoke test.
+verified end-to-end against `test/laplace/test_rfmm2d.f` plus four
+custom matlab-path smoke tests (one per entry point).
 
 | # | Source | C file | Routines | Lines |
 |---|---|---|---|---|
@@ -56,10 +61,17 @@ matlab-path smoke test.
 | 9 | [src/laplace/cfmm2d.f](../src/laplace/cfmm2d.f) | [src/cfmm2d.c](src/cfmm2d.c) | 5 | 1689 → ~1400 |
 | 10 | [src/laplace/cfmm2d_ndiv.f](../src/laplace/cfmm2d_ndiv.f) | [src/cfmm2d_ndiv.c](src/cfmm2d_ndiv.c) | 1 | 435 → ~340 |
 | 11 | [src/laplace/rfmm2d_ndiv.f](../src/laplace/rfmm2d_ndiv.f) | [src/rfmm2d_ndiv.c](src/rfmm2d_ndiv.c) | 1 | 222 → ~180 |
+| 12 | [src/laplace/lfmm2d_ndiv.f](../src/laplace/lfmm2d_ndiv.f) | [src/lfmm2d_ndiv.c](src/lfmm2d_ndiv.c) | 1 | 233 → ~250 |
+| 13 | [src/biharmonic/bhndiv2d.f](../src/biharmonic/bhndiv2d.f) | [src/bhndiv2d.c](src/bhndiv2d.c) | 1 | 39 → ~50 |
+| 14 | [src/biharmonic/bh2dterms.f](../src/biharmonic/bh2dterms.f) | [src/bh2dterms.c](src/bh2dterms.c) | 1 of 3 | 207 → ~70 |
+| 15 | [src/biharmonic/bhkernels2d.f](../src/biharmonic/bhkernels2d.f) | [src/bhkernels2d.c](src/bhkernels2d.c) | 6 | 412 → ~410 |
+| 16 | [src/biharmonic/bhrouts2d.f](../src/biharmonic/bhrouts2d.f) | [src/bhrouts2d.c](src/bhrouts2d.c) | 14 | 1465 → ~840 |
+| 17 | [src/biharmonic/bhfmm2d.f](../src/biharmonic/bhfmm2d.f) | [src/bhfmm2d.c](src/bhfmm2d.c) | 4 | 1531 → ~880 |
+| 18 | [src/stokes/stfmm2d.f](../src/stokes/stfmm2d.f) | [src/stfmm2d.c](src/stfmm2d.c) | 1 | 345 → ~270 |
 
 Routines listed as "N of M" mean only the routines reachable from the
-`rfmm2d` call graph were translated; the rest are unused by this entry
-point and were intentionally skipped.
+target entry-point call graphs were translated; the rest are unused
+and were intentionally skipped.
 
 ## Layout
 
@@ -96,18 +108,23 @@ cd c_translation/
 # 2. Build the C translations and the per-file diff tests:
 make
 
-# 3. Run all 11 differential tests:
+# 3. Run all differential tests:
 make tests
-# Expected output: 11 lines of "PASS: ..."
+# Expected output: PASS lines for all 17 test drivers.
 
 # 4. Run the end-to-end tests through the C drop-in library:
 make e2e
 # Expected output:
 #   ==> build/end2end_rfmm2d (existing test_rfmm2d.f via C drop-in)
 #       PASS (output in build/end2end_rfmm2d.log)
-#   ==> build/end2end_rfmm2d_ndiv (matlab path smoke test)
-#       charge potential at targets: ... rel err= 5.7E-10
+#   ==> build/end2end_rfmm2d_ndiv (matlab rfmm2d smoke test)
 #       PASS: rfmm2d_ndiv end-to-end smoke test
+#   ==> build/end2end_cfmm2d_ndiv (matlab cfmm2d smoke test)
+#       PASS: cfmm2d_ndiv end-to-end smoke test
+#   ==> build/end2end_lfmm2d_ndiv (matlab lfmm2d smoke test)
+#       PASS: lfmm2d_ndiv end-to-end smoke test
+#   ==> build/end2end_stfmm2d (matlab stfmm2d smoke test)
+#       PASS: stfmm2d end-to-end smoke test
 
 # 5. Build the drop-in objects (-O3 with bare Fortran symbol names):
 make dropin
@@ -192,9 +209,12 @@ the original at link time.
 - **OpenMP parallelism.** All `c$omp` directives in the original are
   comments. The C library is sequential. Adding OpenMP (`#pragma omp`)
   is a separate pass.
-- **Other entry points.** Only the routines reachable from
-  `rfmm2d_ndiv` are translated. The Helmholtz, complex-Laplace,
-  Stokes, biharmonic, and modified-biharmonic FMMs are not.
+- **Other entry points.** The Helmholtz FMM (`hfmm2d` and friends)
+  and modified-biharmonic FMM (`mbhfmm2d`) are not translated. Both
+  the Helmholtz and modified-biharmonic entry points are substantial
+  ports — Helmholtz introduces Hankel function evaluation
+  (`hank103.f`), and modified-biharmonic introduces its own
+  multipole/local routine set.
 - **Static archive packaging.** `make dropin` produces individual `.o`
   files but does not bundle them into a `libfmm2d_c.a`. Trivial follow-up.
 - **MATLAB MEX glue.** The C library exports the right symbols, but

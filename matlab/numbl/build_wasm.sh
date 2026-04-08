@@ -2,13 +2,16 @@
 # Build the C-translation of fmm2d as a WebAssembly module for use with numbl.
 # Produces fmm2d.wasm in this directory.
 #
-# Currently only the rfmm2d entry point is exposed (see rfmm2d_wrapper.c).
+# Exposes the rfmm2d, cfmm2d, lfmm2d, and stfmm2d entry points (see
+# rfmm2d_wrapper.c). cfmm2d uses cfmm2d_ndiv (already in c_translation/);
+# lfmm2d uses lfmm2d_ndiv; stfmm2d wraps bhfmm2d which has its own
+# translated tree management.
 #
 # The Fortran sources are not built — Fortran-to-WASM is not practical with
 # current toolchains, which is why c_translation/ exists. We compile each .c
 # file in c_translation/src/ with emcc using -DFMM2D_DROP_IN so the symbols
 # are exported under the bare Fortran ABI names (rfmm2d_ndiv_, hndiv2d_,
-# cfmm2d_, ...) and link them with the rfmm2d wrapper.
+# cfmm2d_, ...) and link them with the wrapper.
 #
 # Prerequisites: emcc on PATH (Emscripten SDK)
 #

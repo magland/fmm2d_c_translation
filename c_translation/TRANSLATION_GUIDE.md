@@ -1,14 +1,18 @@
 # fmm2d → C translation: continuation guide
 
-This document explains how the existing 11-file translation was built
+This document explains how the existing 18-file translation was built
 and how to extend it. The intended reader is an AI coding agent (or a
 human) who wants to translate additional Fortran sources from
 [fmm2d](https://github.com/flatironinstitute/fmm2d) to C.
 
-The work currently covers the call graph of `rfmm2d_ndiv`, the
-real-valued 2D Laplace FMM exposed by [`matlab/rfmm2d.m`](../matlab/rfmm2d.m).
-Adding more entry points (Helmholtz, complex Laplace, Stokes,
-biharmonic, modified biharmonic, etc.) follows the same recipe.
+The work currently covers the call graphs of four entry points:
+- `rfmm2d_ndiv` — real-valued Laplace FMM
+- `cfmm2d_ndiv` — complex Cauchy-kernel Laplace FMM
+- `lfmm2d_ndiv` — log-kernel Laplace FMM with complex densities
+- `stfmm2d` / `bhfmm2d` — 2D Stokes / biharmonic FMM
+
+Adding more entry points (Helmholtz `hfmm2d`, modified biharmonic
+`mbhfmm2d`) follows the same recipe.
 
 ## Table of contents
 
@@ -919,26 +923,18 @@ To add another entry point to the C library, the workflow is:
 
 3. **For each new file**, follow the recipe in [section 6](#6-recipe-translating-one-new-file).
 
-### Likely candidates and their dependencies
+### Remaining candidates and their dependencies
 
-The 2D fmm2d library has these top-level entry points (besides the
-`rfmm2d` family already done):
+The 2D fmm2d library has these top-level entry points still to do:
 
 | Entry point | Description | Estimated new files |
 |---|---|---|
-| `lfmm2d` | Real-valued log-kernel Laplace FMM | 4-6 (lfmm2d.f, lfmm2dwrap.f, lndiv2d.f, lapkernels2d.f, rlapkernels2d.f) |
-| `cfmm2d` | Complex Cauchy-kernel Laplace FMM | already mostly done (cfmm2d.f, cfmm2dwrap.f, cfmm2d_ndiv.f) — just needs the wrap files |
-| `hfmm2d` | Helmholtz FMM | 8-10 files (hfmm2d.f, hfmm2d_ndiv.f, helmrouts2d.f, h2dterms.f, h2dcommon.f, hndiv2d.f, helmkernels2d.f, wideband2d.f, hfmm2d_mps.f, hank103.f, ...) — substantial |
-| `bhfmm2d` | Biharmonic FMM | 5-7 files (bhfmm2d.f, bhrouts2d.f, bh2dterms.f, bhndiv2d.f, bhkernels2d.f, bhfmm2dwrap.f) |
-| `stfmm2d` | Stokes FMM | 2-3 files (stfmm2d.f, stokkernels2d.f); depends on `bhfmm2d` |
-| `mbhfmm2d` | Modified biharmonic FMM | 4-6 files |
+| `hfmm2d` | Helmholtz FMM | 8-10 files (hfmm2d.f, hfmm2d_ndiv.f, helmrouts2d.f, h2dterms.f, h2dcommon.f, helmkernels2d.f, wideband2d.f, hfmm2d_mps.f, hank103.f) — substantial |
+| `mbhfmm2d` | Modified biharmonic FMM | 4-6 files (mbhfmm2d.f, mbhrouts2d.f, mbhkernels2d.f, mbhgreen2d.f) |
 
 The Helmholtz FMM is the biggest single addition. It introduces
 Hankel function evaluation (`hank103.f`) which is a standalone
-~2000-line numerical-special-functions file.
-
-The Stokes and Biharmonic FMMs are smaller and reuse much of the
-common tree code that's already translated.
+~1000-line numerical-special-functions file.
 
 ### What's reusable
 
@@ -949,13 +945,17 @@ for any new entry point:
   (the tree management infrastructure)
 - `l2dterms.f` (Laplace term-count)
 - `cauchykernels2d.f`, `laprouts2d.f` (Laplace kernels and operators)
-- `cfmm2d.f`, `cfmm2d_ndiv.f`, `rfmm2d_ndiv.f` (the cfmm pipeline)
+- `cfmm2d.f`, `cfmm2d_ndiv.f`, `rfmm2d_ndiv.f`, `lfmm2d_ndiv.f`
+  (Laplace pipeline — real, complex Cauchy, complex log)
+- `bhndiv2d.f`, `bh2dterms.f`, `bhkernels2d.f`, `bhrouts2d.f`,
+  `bhfmm2d.f` (the biharmonic pipeline)
+- `stfmm2d.f` (Stokes wrapper around biharmonic)
 
 For Helmholtz, you'd need to translate the `helm*` and `hank103.f`
 files but the tree code is shared.
 
-For Biharmonic / Stokes / modified-Biharmonic, similarly: tree code is
-free, only the kernel-specific files need translation.
+For modified-biharmonic, the tree code is free; only the
+kernel-specific files need translation.
 
 ---
 

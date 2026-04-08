@@ -2,13 +2,15 @@
 # Build fmm2d as a native shared library for use with numbl.
 # Produces fmm2d.so (Linux) or fmm2d.dylib (macOS) in this directory.
 #
-# Currently only the rfmm2d entry point is exposed (see rfmm2d_wrapper.c).
+# Exposes the rfmm2d, cfmm2d, lfmm2d, and stfmm2d entry points (see
+# rfmm2d_wrapper.c).
 #
 # Unlike the WASM build, the native build links against the existing
 # Fortran library (top-level `make lib OMP=OFF`) rather than the C
-# translation. The wrapper calls hndiv2d_ and rfmm2d_ndiv_ — those are
-# the bare Fortran symbols exported by libfmm2d.a, so the wrapper code
-# is identical to the WASM build.
+# translation. The wrapper calls hndiv2d_, rfmm2d_ndiv_, cfmm2d_ndiv_,
+# lfmm2d_ndiv_, and stfmm2d_ — those are the bare Fortran symbols
+# exported by libfmm2d.a, so the wrapper code is identical to the
+# WASM build.
 #
 # Usage:
 #   cd fmm2d/matlab/numbl && bash build_native.sh
@@ -116,12 +118,17 @@ echo "=== Linking fmm2d.$EXT ==="
 if [ "$EXT" = "so" ]; then
   VSCRIPT="$BUILD_DIR/fmm2d.ver"
   cat > "$VSCRIPT" <<'VEOF'
-{ global: rfmm2d_w; local: *; };
+{ global: rfmm2d_w; cfmm2d_w; lfmm2d_w; stfmm2d_w; local: *; };
 VEOF
   EXPORT_FLAGS="-Wl,--version-script=$VSCRIPT"
 else
   EXPORT_LIST="$BUILD_DIR/fmm2d.exports"
-  echo "_rfmm2d_w" > "$EXPORT_LIST"
+  cat > "$EXPORT_LIST" <<'EEOF'
+_rfmm2d_w
+_cfmm2d_w
+_lfmm2d_w
+_stfmm2d_w
+EEOF
   EXPORT_FLAGS="-Wl,-exported_symbols_list,$EXPORT_LIST"
 fi
 
