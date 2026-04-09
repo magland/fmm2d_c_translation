@@ -95,12 +95,19 @@ OBJS+=("$SHIM_OBJ")
 # Step 4: link into a standalone WASM module. STANDALONE_WASM produces a
 # module that can be instantiated by any wasm runtime (numbl runs it under
 # its own loader, not emscripten's JS shim).
+#
+# STACK_SIZE bump: bh2dterms (called from bhfmm2d) declares two
+# fcomplex[2001] locals on the stack — that's 64 KB just by itself,
+# which overflows emscripten's default 64 KB wasm stack and traps as
+# OOB.  Give the wasm stack 2 MB so all of fmm2d's stack-allocated
+# work buffers (bh2dterms, l2dterms, etc.) fit comfortably.
 echo "=== Linking fmm2d.wasm ==="
 em++ "${OBJS[@]}" \
   -O3 \
   -msimd128 \
   -s STANDALONE_WASM \
   -s SUPPORT_LONGJMP=wasm \
+  -s STACK_SIZE=2097152 \
   --no-entry \
   -s TOTAL_MEMORY=67108864 \
   -s ALLOW_MEMORY_GROWTH=1 \
