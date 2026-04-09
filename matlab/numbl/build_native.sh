@@ -68,7 +68,7 @@ OMPLIBS=-lgomp
 FFLAGS=-fPIC -O3 -funroll-loops -std=legacy -w
 EOF
 
-  make lib OMP=OFF FC="$FC"
+  make lib OMP=ON FC="$FC"
   popd > /dev/null
 fi
 
@@ -128,6 +128,7 @@ fi
     "$FMM2D_OBJ" "$SHIM_OBJ" \
     "$LIBFMM2D" \
     $EXPORT_FLAGS \
+    -fopenmp \
     -lm -lstdc++ \
     -o "$SCRIPT_DIR/fmm2d.$EXT"
 
