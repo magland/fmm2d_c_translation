@@ -1,16 +1,8 @@
 #!/bin/bash
-# Build fmm2d as a native shared library for use with numbl.
+# Build a numbl-compatible native shared library that exposes the fmm2d
+# mexFunction (from upstream matlab/fmm2d.c) via a small mex shim.
 # Produces fmm2d.so (Linux) or fmm2d.dylib (macOS) in this directory.
-#
-# Exposes the rfmm2d, cfmm2d, lfmm2d, and stfmm2d entry points (see
-# rfmm2d_wrapper.c).
-#
-# Unlike the WASM build, the native build links against the existing
-# Fortran library (top-level `make lib OMP=OFF`) rather than the C
-# translation. The wrapper calls hndiv2d_, rfmm2d_ndiv_, cfmm2d_ndiv_,
-# lfmm2d_ndiv_, and stfmm2d_ — those are the bare Fortran symbols
-# exported by libfmm2d.a, so the wrapper code is identical to the
-# WASM build.
+# All Fortran fmm2d routines are statically linked from libfmm2d.a.
 #
 # Usage:
 #   cd fmm2d/matlab/numbl && bash build_native.sh
@@ -19,6 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FMM2D_SRC="${FMM2D_SRC:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+BUILD_DIR="$SCRIPT_DIR/build_native"
 
 # Make sure both Homebrew prefixes are on PATH. CI runners often start
 # with neither: /opt/homebrew/bin is the ARM brew location and
@@ -59,11 +52,6 @@ if [ ! -f "$LIBFMM2D" ]; then
   echo "=== Building libfmm2d.a (Fortran) ==="
   pushd "$FMM2D_SRC" > /dev/null
 
-  # Generate a make.inc with -fPIC, OpenMP off, and the discovered FC.
-  # We serialize for numbl since the JS runtime is single-threaded
-  # anyway. The make.inc also pins FC so the makefile uses the
-  # versioned binary we found above (instead of the default `gfortran`,
-  # which may not exist).
   if [ "$EXT" = "dylib" ]; then
     LIBGFORTRAN_NAME="libgfortran.dylib"
   else
@@ -84,59 +72,63 @@ EOF
   popd > /dev/null
 fi
 
-# Step 2: compile the wrapper.
-BUILD_DIR="$SCRIPT_DIR/build_native"
+# Step 2: compile the upstream mwrap-generated MEX source against our
+# tiny mex shim header, plus the shim implementation itself.
 mkdir -p "$BUILD_DIR"
-WRAPPER_OBJ="$BUILD_DIR/rfmm2d_wrapper.o"
-echo "=== Compiling rfmm2d_wrapper.c ==="
-gcc -O3 -std=c99 -fPIC -fvisibility=hidden \
-    -Wall -Wextra -Wno-unused-parameter \
-    -c "$SCRIPT_DIR/rfmm2d_wrapper.c" -o "$WRAPPER_OBJ"
 
-# Step 3: link the shared library. We use $FC (gfortran) as the linker
-# driver, not gcc/g++, for two reasons:
+SHIM_INC="-I$SCRIPT_DIR/mex_shim"
+DEFS="-DMX_HAS_INTERLEAVED_COMPLEX=1 -DMWF77_UNDERSCORE1"
+
+FMM2D_OBJ="$BUILD_DIR/fmm2d.o"
+SHIM_OBJ="$BUILD_DIR/mex_shim.o"
+
+echo "=== Compiling fmm2d.c ==="
+gcc -O3 -std=c99 -fPIC -fvisibility=hidden \
+    -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -Wno-unused-but-set-variable \
+    $SHIM_INC $DEFS \
+    -c "$FMM2D_SRC/matlab/fmm2d.c" -o "$FMM2D_OBJ"
+
+echo "=== Compiling mex_shim.cpp ==="
+g++ -O3 -fPIC -fvisibility=hidden \
+    -Wall -Wextra -Wno-unused-parameter \
+    $SHIM_INC $DEFS \
+    -c "$SCRIPT_DIR/mex_shim.cpp" -o "$SHIM_OBJ"
+
+# Step 3: link the shared library. Use gfortran as the linker driver so
+# it pulls in libgfortran/libquadmath automatically (Ubuntu CI runners
+# only have libgfortran.so.5 in the default install; relying on a manual
+# `-lgfortran` from gcc/g++ would fail to resolve).
 #
-#   1. gfortran knows where its own runtime libraries live (libgfortran,
-#      libquadmath, ...) and passes the right -L paths to ld
-#      automatically. On Ubuntu CI runners, libgfortran.so is only in
-#      the -dev package — only libgfortran.so.5 is installed by default
-#      — so a manual `-lgfortran` from gcc/g++ fails to resolve. Letting
-#      gfortran do the link sidesteps that entirely.
-#
-#   2. The upstream fmm2d makefile already builds libfmm2d.so with
-#      `gfortran -shared`, so this is the same path the existing native
-#      MEX build uses for its shared library.
-#
-# The wrapper only references rfmm2d_ndiv_ and hndiv2d_, but those
-# routines pull in (transitively) the rest of the rfmm2d call graph via
-# cfmm2d_ndiv_, etc. — and ld resolves all of those out of libfmm2d.a
-# in the normal way, so --whole-archive isn't needed. We DO want to
-# hide the Fortran symbols from the dynamic export table though, so the
-# only public ABI of fmm2d.{so,dylib} is rfmm2d_w. On Linux that's a
+# We hide the Fortran symbols from the dynamic export table so the only
+# public ABI of fmm2d.{so,dylib} is mex_*/my_*. On Linux that's a
 # version script; on macOS it's an exported_symbols_list.
 echo "=== Linking fmm2d.$EXT ==="
 if [ "$EXT" = "so" ]; then
   VSCRIPT="$BUILD_DIR/fmm2d.ver"
   cat > "$VSCRIPT" <<'VEOF'
-{ global: rfmm2d_w; cfmm2d_w; lfmm2d_w; stfmm2d_w; local: *; };
+{ global: mex_*; my_*; local: *; };
 VEOF
   EXPORT_FLAGS="-Wl,--version-script=$VSCRIPT"
 else
   EXPORT_LIST="$BUILD_DIR/fmm2d.exports"
-  cat > "$EXPORT_LIST" <<'EEOF'
-_rfmm2d_w
-_cfmm2d_w
-_lfmm2d_w
-_stfmm2d_w
-EEOF
+  : > "$EXPORT_LIST"
+  for sym in mex_alloc_args mex_dispatch mex_free_args mex_free_array \
+             mex_get_arg mex_get_classid mex_get_error mex_get_is_complex \
+             mex_get_m mex_get_n mex_make_complex_matrix mex_make_double_scalar \
+             mex_make_real_matrix mex_make_string mex_make_struct \
+             mex_read_complex mex_read_double_scalar mex_read_real \
+             mex_read_string mex_set_arg mex_struct_set_field \
+             my_malloc my_free; do
+    echo "_${sym}" >> "$EXPORT_LIST"
+  done
   EXPORT_FLAGS="-Wl,-exported_symbols_list,$EXPORT_LIST"
 fi
 
 "$FC" $SHARED_FLAGS \
-    "$WRAPPER_OBJ" \
+    "$FMM2D_OBJ" "$SHIM_OBJ" \
     "$LIBFMM2D" \
     $EXPORT_FLAGS \
-    -lm \
+    -lm -lstdc++ \
     -o "$SCRIPT_DIR/fmm2d.$EXT"
 
 echo "=== Built fmm2d.$EXT ($(wc -c < "$SCRIPT_DIR/fmm2d.$EXT") bytes) ==="
