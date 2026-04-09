@@ -63,8 +63,8 @@ FC=$FC
 CC=gcc
 FDIR=\$(shell dirname \`$FC --print-file-name $LIBGFORTRAN_NAME\`)
 MFLAGS+=-L\${FDIR}
-OMPFLAGS=
-OMPLIBS=
+OMPFLAGS=-fopenmp
+OMPLIBS=-lgomp
 FFLAGS=-fPIC -O3 -funroll-loops -std=legacy -w
 EOF
 
