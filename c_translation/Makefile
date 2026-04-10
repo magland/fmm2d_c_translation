@@ -88,6 +88,9 @@ FORT_SRC_wideband2d      = $(ROOT)/src/helmholtz/wideband2d.f
 FORT_SRC_hfmm2d          = $(ROOT)/src/helmholtz/hfmm2d.f
 FORT_SRC_hfmm2d_ndiv     = $(ROOT)/src/helmholtz/hfmm2d_ndiv.f
 FORT_SRC_dfft_threadsafe = $(ROOT)/src/common/dfft_threadsafe.f
+FORT_SRC_lapkernels2d    = $(ROOT)/src/laplace/lapkernels2d.f
+FORT_SRC_rlapkernels2d   = $(ROOT)/src/laplace/rlapkernels2d.f
+FORT_SRC_stokkernels2d   = $(ROOT)/src/stokes/stokkernels2d.f
 
 # Each translated file is listed here as it gets added.
 C_SRCS  = $(wildcard $(SRCDIR)/*.c)
@@ -235,6 +238,12 @@ $(BUILD)/hfmm2d_ref.o: $(FORT_SRC_hfmm2d) | $(BUILD)
 $(BUILD)/hfmm2d_ndiv_ref.o: $(FORT_SRC_hfmm2d_ndiv) | $(BUILD)
 	$(FC) $(FFLAGS_REF) -c $< -o $@
 $(BUILD)/dfft_threadsafe_ref.o: $(FORT_SRC_dfft_threadsafe) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/lapkernels2d_ref.o: $(FORT_SRC_lapkernels2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/rlapkernels2d_ref.o: $(FORT_SRC_rlapkernels2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/stokkernels2d_ref.o: $(FORT_SRC_stokkernels2d) | $(BUILD)
 	$(FC) $(FFLAGS_REF) -c $< -o $@
 
 .SECONDARY:

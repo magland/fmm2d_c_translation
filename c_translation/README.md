@@ -43,7 +43,7 @@ points, adding routines), see [TRANSLATION_GUIDE.md](TRANSLATION_GUIDE.md).
 
 ## Status
 
-29 of the original Fortran source files have been translated. Every
+32 of the original Fortran source files have been translated. Every
 translated routine has been verified against its Fortran original with
 a bit-for-bit differential test, and the assembled C library has been
 verified end-to-end against `test/laplace/test_rfmm2d.f` plus four
@@ -80,6 +80,9 @@ custom matlab-path smoke tests (one per entry point).
 | 27 | [src/helmholtz/hfmm2d.f](../src/helmholtz/hfmm2d.f) | [src/hfmm2d.c](src/hfmm2d.c) | 5 | 1988 → ~1900 |
 | 28 | [src/helmholtz/hfmm2d_ndiv.f](../src/helmholtz/hfmm2d_ndiv.f) | [src/hfmm2d_ndiv.c](src/hfmm2d_ndiv.c) | 1 | 447 → ~340 |
 | 29 | [src/common/dfft_threadsafe.f](../src/common/dfft_threadsafe.f) | [src/dfft_threadsafe.c](src/dfft_threadsafe.c) | 16 of 36 | 2766 → ~1094 |
+| 30 | [src/laplace/lapkernels2d.f](../src/laplace/lapkernels2d.f) | [src/lapkernels2d.c](src/lapkernels2d.c) | 9 | 815 → ~494 |
+| 31 | [src/laplace/rlapkernels2d.f](../src/laplace/rlapkernels2d.f) | [src/rlapkernels2d.c](src/rlapkernels2d.c) | 9 | 805 → ~491 |
+| 32 | [src/stokes/stokkernels2d.f](../src/stokes/stokkernels2d.f) | [src/stokkernels2d.c](src/stokkernels2d.c) | 2 | 338 → ~173 |
 
 Routines listed as "N of M" mean only the routines reachable from the
 target entry-point call graphs were translated; the rest are unused
@@ -223,8 +226,9 @@ the original at link time.
   is a separate pass.
 - **Other entry points.** The modified-biharmonic FMM (`mbhfmm2d`)
   is not translated. It introduces its own multipole/local routine
-  set. The Helmholtz FMM (`hfmm2d`) and all its dependencies are
-  now fully translated.
+  set. All five MATLAB entry points (`rfmm2d`, `cfmm2d`, `lfmm2d`,
+  `stfmm2d`, `hfmm2d`) and their direct evaluator kernels are now
+  fully translated — the wasm build has no remaining stubs.
 - **Static archive packaging.** `make dropin` produces individual `.o`
   files but does not bundle them into a `libfmm2d_c.a`. Trivial follow-up.
 - **MATLAB MEX glue.** The C library exports the right symbols, but
