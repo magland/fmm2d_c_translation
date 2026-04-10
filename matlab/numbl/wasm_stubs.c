@@ -6,15 +6,10 @@
  * native build links against the full Fortran libfmm2d.a, which has real
  * implementations.
  *
- * Each stub sets `ier` (the trailing int* arg) to a nonzero error code
- * when present, so any caller that actually invokes one via fmm2d.c
- * gets a clean runtime failure rather than crashing on a missing symbol.
- * The wasm backend therefore cannot run the parts of rfmm2dTest /
- * lfmm2dTest / cfmm2dTest / hfmm2dTest / stfmm2dTest that exercise
- * the direct evaluators or the Helmholtz FMM until c_translation grows
- * the missing entry points.  The plain FMM driver paths
- * (rfmm2d_ndiv, lfmm2d_ndiv, cfmm2d_ndiv, stfmm2d) work fine in wasm
- * because c_translation provides them.
+ * Each stub calls mexErrMsgTxt to raise a clear "not implemented" error
+ * that propagates through mex_dispatch as a RuntimeError in JS. This
+ * ensures callers get an immediate, obvious failure rather than silently
+ * receiving zero results with ier=1.
  *
  * Signatures match the MWF77_* declarations at the top of matlab/fmm2d.c
  * exactly so wasm-ld accepts the resulting object alongside fmm2d.o.
@@ -25,11 +20,12 @@
 
 typedef _Complex double dcomplex;
 
-/* Set *ier (always the LAST int* arg of these stubs that take one) to a
- * nonzero value.  fmm2d.c's stubs propagate it back through plhs and the
- * MATLAB caller will see ier != 0.  Stubs that don't take an ier just
- * abort silently (they're never invoked through the test path). */
-#define STUB_IER(p) do { if (p) *(p) = 1; } while (0)
+/* mexErrMsgTxt is provided by mex_shim.cpp; it longjmps back to
+ * mex_dispatch which returns rc=1 and surfaces the message to JS. */
+extern void mexErrMsgTxt(const char *msg);
+
+#define STUB_NOT_IMPLEMENTED(name) \
+    mexErrMsgTxt("fmm2d wasm: " name " is not yet ported to C/wasm")
 
 /* ── Helmholtz FMM driver ─────────────────────────────────────────── */
 
@@ -43,13 +39,7 @@ void hfmm2d_ndiv_(int *nd, double *eps, dcomplex *zk,
                   dcomplex *pottarg, dcomplex *gradtarg, dcomplex *hesstarg,
                   int *ndiv, int *idivflag, int *ifnear,
                   double *timeinfo, int *ier) {
-    (void)nd; (void)eps; (void)zk; (void)ifcharge; (void)sources;
-    (void)ns; (void)charge; (void)ifdipole; (void)dipstr; (void)dipvec;
-    (void)iper; (void)ifpgh; (void)pot; (void)grad; (void)hess;
-    (void)nt; (void)targ; (void)ifpghtarg;
-    (void)pottarg; (void)gradtarg; (void)hesstarg;
-    (void)ndiv; (void)idivflag; (void)ifnear; (void)timeinfo;
-    STUB_IER(ier);
+    STUB_NOT_IMPLEMENTED("hfmm2d_ndiv");
 }
 
 /* ── Helmholtz direct evaluators (h2d_direct*) ────────────────────── */
@@ -57,67 +47,55 @@ void hfmm2d_ndiv_(int *nd, double *eps, dcomplex *zk,
 void h2d_directcp_(int *nd, dcomplex *zk, double *sources,
                    int *ns, dcomplex *charge, double *targ,
                    int *nt, dcomplex *pot, double *thresh) {
-    (void)nd; (void)zk; (void)sources; (void)ns; (void)charge;
-    (void)targ; (void)nt; (void)pot; (void)thresh;
+    STUB_NOT_IMPLEMENTED("h2d_directcp");
 }
 void h2d_directdp_(int *nd, dcomplex *zk, double *sources,
                    int *ns, dcomplex *dipstr, double *dipvec,
                    double *targ, int *nt, dcomplex *pot, double *thresh) {
-    (void)nd; (void)zk; (void)sources; (void)ns; (void)dipstr;
-    (void)dipvec; (void)targ; (void)nt; (void)pot; (void)thresh;
+    STUB_NOT_IMPLEMENTED("h2d_directdp");
 }
 void h2d_directcdp_(int *nd, dcomplex *zk, double *sources,
                     int *ns, dcomplex *charge, dcomplex *dipstr,
                     double *dipvec, double *targ, int *nt,
                     dcomplex *pot, double *thresh) {
-    (void)nd; (void)zk; (void)sources; (void)ns; (void)charge;
-    (void)dipstr; (void)dipvec; (void)targ; (void)nt; (void)pot; (void)thresh;
+    STUB_NOT_IMPLEMENTED("h2d_directcdp");
 }
 void h2d_directcg_(int *nd, dcomplex *zk, double *sources,
                    int *ns, dcomplex *charge, double *targ, int *nt,
                    dcomplex *pot, dcomplex *grad, double *thresh) {
-    (void)nd; (void)zk; (void)sources; (void)ns; (void)charge;
-    (void)targ; (void)nt; (void)pot; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("h2d_directcg");
 }
 void h2d_directdg_(int *nd, dcomplex *zk, double *sources,
                    int *ns, dcomplex *dipstr, double *dipvec,
                    double *targ, int *nt,
                    dcomplex *pot, dcomplex *grad, double *thresh) {
-    (void)nd; (void)zk; (void)sources; (void)ns; (void)dipstr;
-    (void)dipvec; (void)targ; (void)nt; (void)pot; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("h2d_directdg");
 }
 void h2d_directcdg_(int *nd, dcomplex *zk, double *sources,
                     int *ns, dcomplex *charge, dcomplex *dipstr,
                     double *dipvec, double *targ, int *nt,
                     dcomplex *pot, dcomplex *grad, double *thresh) {
-    (void)nd; (void)zk; (void)sources; (void)ns; (void)charge;
-    (void)dipstr; (void)dipvec; (void)targ; (void)nt;
-    (void)pot; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("h2d_directcdg");
 }
 void h2d_directch_(int *nd, dcomplex *zk, double *sources,
                    int *ns, dcomplex *charge, double *targ, int *nt,
                    dcomplex *pot, dcomplex *grad, dcomplex *hess,
                    double *thresh) {
-    (void)nd; (void)zk; (void)sources; (void)ns; (void)charge;
-    (void)targ; (void)nt; (void)pot; (void)grad; (void)hess; (void)thresh;
+    STUB_NOT_IMPLEMENTED("h2d_directch");
 }
 void h2d_directdh_(int *nd, dcomplex *zk, double *sources,
                    int *ns, dcomplex *dipstr, double *dipvec,
                    double *targ, int *nt,
                    dcomplex *pot, dcomplex *grad, dcomplex *hess,
                    double *thresh) {
-    (void)nd; (void)zk; (void)sources; (void)ns; (void)dipstr;
-    (void)dipvec; (void)targ; (void)nt;
-    (void)pot; (void)grad; (void)hess; (void)thresh;
+    STUB_NOT_IMPLEMENTED("h2d_directdh");
 }
 void h2d_directcdh_(int *nd, dcomplex *zk, double *sources,
                     int *ns, dcomplex *charge, dcomplex *dipstr,
                     double *dipvec, double *targ, int *nt,
                     dcomplex *pot, dcomplex *grad, dcomplex *hess,
                     double *thresh) {
-    (void)nd; (void)zk; (void)sources; (void)ns; (void)charge;
-    (void)dipstr; (void)dipvec; (void)targ; (void)nt;
-    (void)pot; (void)grad; (void)hess; (void)thresh;
+    STUB_NOT_IMPLEMENTED("h2d_directcdh");
 }
 
 /* ── Laplace direct evaluators (l2d_direct*) — complex out ────────── */
@@ -125,64 +103,52 @@ void h2d_directcdh_(int *nd, dcomplex *zk, double *sources,
 void l2d_directcp_(int *nd, double *sources, int *ns,
                    dcomplex *charge, double *targ, int *nt,
                    dcomplex *pot, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge;
-    (void)targ; (void)nt; (void)pot; (void)thresh;
+    STUB_NOT_IMPLEMENTED("l2d_directcp");
 }
 void l2d_directdp_(int *nd, double *sources, int *ns,
                    dcomplex *dipstr, double *dipvec,
                    double *targ, int *nt, dcomplex *pot, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)dipstr; (void)dipvec;
-    (void)targ; (void)nt; (void)pot; (void)thresh;
+    STUB_NOT_IMPLEMENTED("l2d_directdp");
 }
 void l2d_directcdp_(int *nd, double *sources, int *ns,
                     dcomplex *charge, dcomplex *dipstr, double *dipvec,
                     double *targ, int *nt, dcomplex *pot, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge; (void)dipstr;
-    (void)dipvec; (void)targ; (void)nt; (void)pot; (void)thresh;
+    STUB_NOT_IMPLEMENTED("l2d_directcdp");
 }
 void l2d_directcg_(int *nd, double *sources, int *ns,
                    dcomplex *charge, double *targ, int *nt,
                    dcomplex *pot, dcomplex *grad, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge;
-    (void)targ; (void)nt; (void)pot; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("l2d_directcg");
 }
 void l2d_directdg_(int *nd, double *sources, int *ns,
                    dcomplex *dipstr, double *dipvec, double *targ, int *nt,
                    dcomplex *pot, dcomplex *grad, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)dipstr; (void)dipvec;
-    (void)targ; (void)nt; (void)pot; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("l2d_directdg");
 }
 void l2d_directcdg_(int *nd, double *sources, int *ns,
                     dcomplex *charge, dcomplex *dipstr, double *dipvec,
                     double *targ, int *nt,
                     dcomplex *pot, dcomplex *grad, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge; (void)dipstr;
-    (void)dipvec; (void)targ; (void)nt;
-    (void)pot; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("l2d_directcdg");
 }
 void l2d_directch_(int *nd, double *sources, int *ns,
                    dcomplex *charge, double *targ, int *nt,
                    dcomplex *pot, dcomplex *grad, dcomplex *hess,
                    double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge;
-    (void)targ; (void)nt; (void)pot; (void)grad; (void)hess; (void)thresh;
+    STUB_NOT_IMPLEMENTED("l2d_directch");
 }
 void l2d_directdh_(int *nd, double *sources, int *ns,
                    dcomplex *dipstr, double *dipvec, double *targ, int *nt,
                    dcomplex *pot, dcomplex *grad, dcomplex *hess,
                    double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)dipstr; (void)dipvec;
-    (void)targ; (void)nt;
-    (void)pot; (void)grad; (void)hess; (void)thresh;
+    STUB_NOT_IMPLEMENTED("l2d_directdh");
 }
 void l2d_directcdh_(int *nd, double *sources, int *ns,
                     dcomplex *charge, dcomplex *dipstr, double *dipvec,
                     double *targ, int *nt,
                     dcomplex *pot, dcomplex *grad, dcomplex *hess,
                     double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge; (void)dipstr;
-    (void)dipvec; (void)targ; (void)nt;
-    (void)pot; (void)grad; (void)hess; (void)thresh;
+    STUB_NOT_IMPLEMENTED("l2d_directcdh");
 }
 
 /* ── Real direct evaluators (r2d_direct*) — real out ──────────────── */
@@ -190,61 +156,49 @@ void l2d_directcdh_(int *nd, double *sources, int *ns,
 void r2d_directcp_(int *nd, double *sources, int *ns,
                    double *charge, double *targ, int *nt,
                    double *pot, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge;
-    (void)targ; (void)nt; (void)pot; (void)thresh;
+    STUB_NOT_IMPLEMENTED("r2d_directcp");
 }
 void r2d_directdp_(int *nd, double *sources, int *ns,
                    double *dipstr, double *dipvec,
                    double *targ, int *nt, double *pot, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)dipstr; (void)dipvec;
-    (void)targ; (void)nt; (void)pot; (void)thresh;
+    STUB_NOT_IMPLEMENTED("r2d_directdp");
 }
 void r2d_directcdp_(int *nd, double *sources, int *ns,
                     double *charge, double *dipstr, double *dipvec,
                     double *targ, int *nt, double *pot, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge; (void)dipstr;
-    (void)dipvec; (void)targ; (void)nt; (void)pot; (void)thresh;
+    STUB_NOT_IMPLEMENTED("r2d_directcdp");
 }
 void r2d_directcg_(int *nd, double *sources, int *ns,
                    double *charge, double *targ, int *nt,
                    double *pot, double *grad, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge;
-    (void)targ; (void)nt; (void)pot; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("r2d_directcg");
 }
 void r2d_directdg_(int *nd, double *sources, int *ns,
                    double *dipstr, double *dipvec, double *targ, int *nt,
                    double *pot, double *grad, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)dipstr; (void)dipvec;
-    (void)targ; (void)nt; (void)pot; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("r2d_directdg");
 }
 void r2d_directcdg_(int *nd, double *sources, int *ns,
                     double *charge, double *dipstr, double *dipvec,
                     double *targ, int *nt,
                     double *pot, double *grad, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge; (void)dipstr;
-    (void)dipvec; (void)targ; (void)nt;
-    (void)pot; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("r2d_directcdg");
 }
 void r2d_directch_(int *nd, double *sources, int *ns,
                    double *charge, double *targ, int *nt,
                    double *pot, double *grad, double *hess, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge;
-    (void)targ; (void)nt; (void)pot; (void)grad; (void)hess; (void)thresh;
+    STUB_NOT_IMPLEMENTED("r2d_directch");
 }
 void r2d_directdh_(int *nd, double *sources, int *ns,
                    double *dipstr, double *dipvec, double *targ, int *nt,
                    double *pot, double *grad, double *hess, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)dipstr; (void)dipvec;
-    (void)targ; (void)nt;
-    (void)pot; (void)grad; (void)hess; (void)thresh;
+    STUB_NOT_IMPLEMENTED("r2d_directdh");
 }
 void r2d_directcdh_(int *nd, double *sources, int *ns,
                     double *charge, double *dipstr, double *dipvec,
                     double *targ, int *nt,
                     double *pot, double *grad, double *hess, double *thresh) {
-    (void)nd; (void)sources; (void)ns; (void)charge; (void)dipstr;
-    (void)dipvec; (void)targ; (void)nt;
-    (void)pot; (void)grad; (void)hess; (void)thresh;
+    STUB_NOT_IMPLEMENTED("r2d_directcdh");
 }
 
 /* ── Stokes direct evaluators (st2d_direct*) ──────────────────────── */
@@ -252,8 +206,7 @@ void r2d_directcdh_(int *nd, double *sources, int *ns,
 void st2ddirectstokg_(int *nd, double *sources, double *stoklet,
                       int *ns, double *targ, int *nt,
                       double *pot, double *pre, double *grad, double *thresh) {
-    (void)nd; (void)sources; (void)stoklet; (void)ns;
-    (void)targ; (void)nt; (void)pot; (void)pre; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("st2ddirectstokg");
 }
 void st2ddirectstokstrsg_(int *nd, double *sources,
                           int *ifstoklet, double *stoklet,
@@ -261,7 +214,5 @@ void st2ddirectstokstrsg_(int *nd, double *sources,
                           int *ns, double *targ, int *nt,
                           double *pot, double *pre, double *grad,
                           double *thresh) {
-    (void)nd; (void)sources; (void)ifstoklet; (void)stoklet;
-    (void)ifstrslet; (void)strslet; (void)strsvec; (void)ns;
-    (void)targ; (void)nt; (void)pot; (void)pre; (void)grad; (void)thresh;
+    STUB_NOT_IMPLEMENTED("st2ddirectstokstrsg");
 }
