@@ -30,20 +30,8 @@ extern void mexErrMsgTxt(const char *msg);
 /* ── Helmholtz stubs removed: real implementations now in
       c_translation/src/hfmm2d_ndiv.c and helmkernels2d.c ────────── */
 
-/* ── FFT routines from dfft_threadsafe.f (not yet translated) ───── */
-/* These are only called from the wideband high-frequency path in
-   hfmm2d when boxsize/wavelength > 16. For low-frequency problems
-   (the common case), these are never reached. */
-
-void zffti_(int *n, dcomplex *wsave) {
-    STUB_NOT_IMPLEMENTED("zffti (FFT init — high-frequency path)");
-}
-void zfftf_(int *n, dcomplex *c, dcomplex *wsave) {
-    STUB_NOT_IMPLEMENTED("zfftf (FFT forward — high-frequency path)");
-}
-void zfftb_(int *n, dcomplex *c, dcomplex *wsave) {
-    STUB_NOT_IMPLEMENTED("zfftb (FFT backward — high-frequency path)");
-}
+/* ── FFT routines removed: real implementations now in
+      c_translation/src/dfft_threadsafe.c ───────────────────────── */
 
 /* ── Laplace direct evaluators (l2d_direct*) — complex out ────────── */
 

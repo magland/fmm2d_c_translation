@@ -43,7 +43,7 @@ points, adding routines), see [TRANSLATION_GUIDE.md](TRANSLATION_GUIDE.md).
 
 ## Status
 
-28 of the original Fortran source files have been translated. Every
+29 of the original Fortran source files have been translated. Every
 translated routine has been verified against its Fortran original with
 a bit-for-bit differential test, and the assembled C library has been
 verified end-to-end against `test/laplace/test_rfmm2d.f` plus four
@@ -79,6 +79,7 @@ custom matlab-path smoke tests (one per entry point).
 | 26 | [src/helmholtz/wideband2d.f](../src/helmholtz/wideband2d.f) | [src/wideband2d.c](src/wideband2d.c) | 8 | 537 → ~270 |
 | 27 | [src/helmholtz/hfmm2d.f](../src/helmholtz/hfmm2d.f) | [src/hfmm2d.c](src/hfmm2d.c) | 5 | 1988 → ~1900 |
 | 28 | [src/helmholtz/hfmm2d_ndiv.f](../src/helmholtz/hfmm2d_ndiv.f) | [src/hfmm2d_ndiv.c](src/hfmm2d_ndiv.c) | 1 | 447 → ~340 |
+| 29 | [src/common/dfft_threadsafe.f](../src/common/dfft_threadsafe.f) | [src/dfft_threadsafe.c](src/dfft_threadsafe.c) | 16 of 36 | 2766 → ~1094 |
 
 Routines listed as "N of M" mean only the routines reachable from the
 target entry-point call graphs were translated; the rest are unused
