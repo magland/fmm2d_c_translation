@@ -1109,10 +1109,8 @@ void FNAME(mbh2dmpmp_vec)(
 
 /* ================================================================
  * mbh2dmploc_vec - multipole to local translation
- * This is a stub - the full translation is extremely complex.
- * For the diff test framework, the Fortran reference handles this.
  * ================================================================ */
-/* TODO: Translate mbh2dmploc_vec from Fortran */
+
 void FNAME(mbh2dmploc_vec)(
     const fint *nd_p, const double *beta_p,
     const double *rscale1_p, const double *center1,
@@ -1120,22 +1118,151 @@ void FNAME(mbh2dmploc_vec)(
     const double *rscale2_p, const double *center2,
     fcomplex *mbhloc, fcomplex *lloc, const fint *nterms2_p)
 {
-    /* Stub: calls Fortran original. Full C translation is pending. */
-    extern void mbh2dmploc_vec_(const fint *, const double *,
-        const double *, const double *,
-        const fcomplex *, const fcomplex *, const fint *,
-        const double *, const double *,
-        fcomplex *, fcomplex *, const fint *);
-    mbh2dmploc_vec_(nd_p, beta_p, rscale1_p, center1,
-        mbhmpole, ympole, nterms1_p,
-        rscale2_p, center2, mbhloc, lloc, nterms2_p);
-}
+    fint nd = *nd_p, nterms1 = *nterms1_p, nterms2 = *nterms2_p;
+    double beta = *beta_p, rscale1 = *rscale1_p, rscale2 = *rscale2_p;
+    fcomplex ima = I;
+    double pi = 4.0 * atan(1.0);
 
+    fint nterms = nterms1 + nterms2;
+    fint alloc_sz = nterms + 7;
+    double *diffs = (double *)malloc(alloc_sz * sizeof(double));
+    double *kvec = (double *)malloc(alloc_sz * sizeof(double));
+    double *pow_arr = (double *)malloc(alloc_sz * sizeof(double));
+    double *dpow_arr = (double *)malloc(alloc_sz * sizeof(double));
+    double *dfac2 = (double *)malloc(alloc_sz * sizeof(double));
+    fcomplex *ktemp = (fcomplex *)malloc(alloc_sz * sizeof(fcomplex));
+    fcomplex *difftemp = (fcomplex *)malloc(alloc_sz * sizeof(fcomplex));
+    fcomplex *powtemp = (fcomplex *)malloc(alloc_sz * sizeof(fcomplex));
+
+    dfac2[0] = 1.0;
+    for (fint i = 1; i <= nterms; i++) {
+        dfac2[i] = dfac2[i-1] / (2.0 * i);
+    }
+
+    double zdiff[2];
+    zdiff[0] = center2[0] - center1[0];
+    zdiff[1] = center2[1] - center1[1];
+    double r, theta;
+    h2cart2polar_(zdiff, &r, &theta);
+    theta = theta - pi;
+
+    /* get values of (beta*r)^-k */
+    FNAME(mbh2d_rmk)(pow_arr, dpow_arr, &r, &beta, &rscale1, &nterms);
+
+    /* get values of difference functions */
+    fint ifders = 0;
+    double ders_loc[2];
+    diffslogbk_fast_(&r, &beta, &rscale1, diffs, &ifders, ders_loc, kvec,
+        &nterms);
+
+    /* form terms for shifting */
+    ktemp[0] = kvec[0];
+    difftemp[0] = diffs[0];
+    powtemp[0] = pow_arr[0];
+    fcomplex zmul = -cexp(ima * theta);
+    fcomplex ztemp1 = zmul;
+    for (fint j = 1; j <= nterms; j++) {
+        ktemp[j] = ztemp1 * kvec[j];
+        difftemp[j] = ztemp1 * diffs[j];
+        powtemp[j] = ztemp1 * pow_arr[j];
+        ztemp1 = ztemp1 * zmul;
+    }
+
+    /* shift - i=0 terms */
+    for (fint l = 1; l <= nd; l++) {
+        mbhloc[l-1] += mbhmpole[l-1] * ktemp[0];
+        mbhloc[l-1] += ympole[l-1] * ktemp[0];
+        lloc[l-1] += mbhmpole[l-1] * (ktemp[0] + pow_arr[0]);
+        lloc[l-1] += ympole[l-1] * ktemp[0];
+    }
+    for (fint j = 1; j <= nterms1; j++) {
+        for (fint l = 1; l <= nd; l++) {
+            mbhloc[l-1] +=
+                (creal(mbhmpole[j*nd+l-1]) * creal(ktemp[j])
+                + cimag(mbhmpole[j*nd+l-1]) * cimag(ktemp[j]));
+            mbhloc[l-1] +=
+                (creal(ympole[j*nd+l-1]) * creal(ktemp[j])
+                + cimag(ympole[j*nd+l-1]) * cimag(ktemp[j]));
+            lloc[l-1] +=
+                (creal(mbhmpole[j*nd+l-1]) * creal(difftemp[j])
+                + cimag(mbhmpole[j*nd+l-1]) * cimag(difftemp[j]));
+            lloc[l-1] +=
+                (creal(ympole[j*nd+l-1]) * creal(ktemp[j])
+                + cimag(ympole[j*nd+l-1]) * cimag(ktemp[j]));
+        }
+    }
+
+    /* shift - i >= 1 terms */
+    double rsi = rscale1;
+    double rsi2 = rscale1 * rscale1;
+    double rsi5 = rscale2 / rscale1;
+    fint isign = -1;
+    for (fint i = 1; i <= nterms2; i++) {
+        double dtmp1 = isign * rsi5 * 2;
+        double dtmp2 = dtmp1 * dfac2[i];
+        for (fint l = 1; l <= nd; l++) {
+            mbhloc[i*nd+l-1] += dtmp1 *
+                creal(mbhmpole[l-1]) * ktemp[i];
+            mbhloc[i*nd+l-1] += dtmp1 *
+                creal(ympole[l-1]) * ktemp[i];
+            lloc[i*nd+l-1] += dtmp2 *
+                creal(mbhmpole[l-1]) * difftemp[i];
+            lloc[i*nd+l-1] += dtmp2 *
+                creal(ympole[l-1]) * ktemp[i];
+        }
+        double rsj = rscale1;
+        double rsj2 = rscale1 * rscale1;
+        dtmp1 = isign * rsi5;
+        dtmp2 = dtmp1 * dfac2[i];
+        for (fint j = 1; j <= (nterms1 < i ? nterms1 : i); j++) {
+            double dtmp3 = dtmp1 * rsj2;
+            double dtmp4 = dtmp2 * rsj2;
+
+            for (fint l = 1; l <= nd; l++) {
+                mbhloc[i*nd+l-1] += dtmp3 *
+                    (mbhmpole[j*nd+l-1] + ympole[j*nd+l-1]) * ktemp[i-j];
+                mbhloc[i*nd+l-1] += dtmp1 *
+                    conj(mbhmpole[j*nd+l-1] + ympole[j*nd+l-1]) * ktemp[i+j];
+                lloc[i*nd+l-1] += dtmp4 *
+                    (mbhmpole[j*nd+l-1] + ympole[j*nd+l-1]) * ktemp[i-j];
+                lloc[i*nd+l-1] += dtmp2 *
+                    conj(mbhmpole[j*nd+l-1]) * difftemp[i+j];
+                lloc[i*nd+l-1] += dtmp2 *
+                    conj(ympole[j*nd+l-1]) * ktemp[i+j];
+            }
+            rsj = rsj * rscale1;
+            rsj2 = rsj2 * rscale1 * rscale1;
+        }
+        double dtmp3 = dtmp1 * rsi2;
+        double dtmp4 = dtmp2 * rsi2;
+        for (fint j = i + 1; j <= nterms1; j++) {
+            for (fint l = 1; l <= nd; l++) {
+                mbhloc[i*nd+l-1] += dtmp3 *
+                    (mbhmpole[j*nd+l-1] + ympole[j*nd+l-1]) * conj(ktemp[j-i]);
+                mbhloc[i*nd+l-1] += dtmp1 *
+                    conj(mbhmpole[j*nd+l-1] + ympole[j*nd+l-1]) * ktemp[i+j];
+                lloc[i*nd+l-1] += dtmp4 *
+                    (mbhmpole[j*nd+l-1] + ympole[j*nd+l-1]) * conj(ktemp[j-i]);
+                lloc[i*nd+l-1] += dtmp2 *
+                    conj(mbhmpole[j*nd+l-1]) * difftemp[i+j];
+                lloc[i*nd+l-1] += dtmp2 *
+                    conj(ympole[j*nd+l-1]) * ktemp[i+j];
+            }
+        }
+        isign = -isign;
+        rsi = rsi * rscale1;
+        rsi2 = rsi2 * rscale1 * rscale1;
+        rsi5 = rsi5 * rscale2 / rscale1;
+    }
+
+    free(ktemp); free(difftemp); free(powtemp);
+    free(diffs); free(kvec); free(pow_arr); free(dpow_arr); free(dfac2);
+}
 
 /* ================================================================
  * mbh2dlocloc_vec - local to local translation
  * ================================================================ */
-/* TODO: Translate mbh2dlocloc_vec from Fortran */
+
 void FNAME(mbh2dlocloc_vec)(
     const fint *nd_p, const double *beta_p,
     const double *rscale1_p, const double *center1,
@@ -1144,16 +1271,158 @@ void FNAME(mbh2dlocloc_vec)(
     fcomplex *mbhloc2, fcomplex *lloc2, const fint *nterms2_p,
     const double *carray, const fint *ldc_p)
 {
-    /* Stub: calls Fortran original. Full C translation is pending. */
-    extern void mbh2dlocloc_vec_(const fint *, const double *,
-        const double *, const double *,
-        const fcomplex *, const fcomplex *, const fint *,
-        const double *, const double *,
-        fcomplex *, fcomplex *, const fint *,
-        const double *, const fint *);
-    mbh2dlocloc_vec_(nd_p, beta_p, rscale1_p, center1,
-        mbhloc1, lloc1, nterms1_p,
-        rscale2_p, center2, mbhloc2, lloc2, nterms2_p,
-        carray, ldc_p);
-}
+    fint nd = *nd_p, nterms1 = *nterms1_p, nterms2 = *nterms2_p;
+    double beta = *beta_p, rscale1 = *rscale1_p, rscale2 = *rscale2_p;
+    fint ldc = *ldc_p;
+    fcomplex ima = I;
+    double pi = 4.0 * atan(1.0);
 
+    fint nterms = nterms1 + nterms2;
+    fint alloc_sz = nterms + 7;
+    fcomplex *jtemp = (fcomplex *)malloc(alloc_sz * sizeof(fcomplex));
+    fcomplex *difftemp = (fcomplex *)malloc(alloc_sz * sizeof(fcomplex));
+    fcomplex *powtemp = (fcomplex *)malloc(alloc_sz * sizeof(fcomplex));
+    double *ival = (double *)malloc(alloc_sz * sizeof(double));
+    double *diffs = (double *)malloc(alloc_sz * sizeof(double));
+    double *pow_arr = (double *)malloc(alloc_sz * sizeof(double));
+    double *dpow_arr = (double *)malloc(alloc_sz * sizeof(double));
+    double *pow2 = (double *)malloc(alloc_sz * sizeof(double));
+    double *dfac2 = (double *)malloc(alloc_sz * sizeof(double));
+
+    double zdiff[2];
+    zdiff[0] = center2[0] - center1[0];
+    zdiff[1] = center2[1] - center1[1];
+    double r, theta;
+    h2cart2polar_(zdiff, &r, &theta);
+    theta = theta - pi;
+
+    fint ifder = 0;
+    double ders_loc[2];
+    diffszkik_fast_(&r, &beta, &rscale1, diffs, &ifder, ders_loc, ival,
+        &nterms);
+
+    FNAME(mbh2d_rk)(pow_arr, dpow_arr, &r, &beta, &rscale1, &nterms);
+    FNAME(mbh2d_rksc)(pow2, dpow_arr, &r, &beta, &rscale1, &nterms);
+
+    dfac2[0] = 1.0;
+    for (fint i = 1; i <= nterms; i++) {
+        dfac2[i] = dfac2[i-1] / (2.0 * i);
+    }
+
+    jtemp[0] = ival[0];
+    powtemp[0] = pow_arr[0];
+    difftemp[0] = diffs[0];
+    fcomplex zmul = -cexp(ima * theta);
+    fcomplex ztemp1 = zmul;
+    for (fint j = 1; j <= nterms; j++) {
+        jtemp[j] = ztemp1 * ival[j];
+        difftemp[j] = ztemp1 * diffs[j];
+        powtemp[j] = ztemp1 * pow_arr[j];
+        ztemp1 = ztemp1 * zmul;
+    }
+
+    /* i=0 terms */
+    for (fint l = 1; l <= nd; l++) {
+        mbhloc2[l-1] += mbhloc1[l-1] * jtemp[0];
+        lloc2[l-1] += mbhloc1[l-1] * difftemp[0];
+        lloc2[l-1] += lloc1[l-1] * powtemp[0];
+    }
+    for (fint j = 1; j <= nterms1; j++) {
+        for (fint l = 1; l <= nd; l++) {
+            mbhloc2[l-1] +=
+                (creal(mbhloc1[j*nd+l-1]) * creal(jtemp[j])
+                + cimag(mbhloc1[j*nd+l-1]) * cimag(jtemp[j]));
+            lloc2[l-1] +=
+                (creal(mbhloc1[j*nd+l-1]) * creal(difftemp[j])
+                + cimag(mbhloc1[j*nd+l-1]) * cimag(difftemp[j]));
+            lloc2[l-1] +=
+                (creal(lloc1[j*nd+l-1]) * creal(powtemp[j])
+                + cimag(lloc1[j*nd+l-1]) * cimag(powtemp[j]));
+        }
+    }
+
+    /* i >= 1 terms */
+    double rsi = rscale1;
+    double rsi7 = rscale2;
+    double rsi5 = rscale2 / rscale1;
+    for (fint i = 1; i <= nterms2; i++) {
+        for (fint l = 1; l <= nd; l++) {
+            mbhloc2[i*nd+l-1] +=
+                2.0 * (creal(mbhloc1[l-1]) * creal(jtemp[i])
+                + ima * creal(mbhloc1[l-1]) * cimag(jtemp[i])) * rsi7 * rsi;
+            lloc2[i*nd+l-1] +=
+                2.0 * (creal(mbhloc1[l-1]) * creal(jtemp[i])
+                + ima * creal(mbhloc1[l-1]) * cimag(jtemp[i])) * rsi7 * rsi *
+                dfac2[i];
+        }
+        double fs2 = rsi5 * rscale1 * rscale1;
+        if (nterms1 <= i - 1)
+            fs2 = fs2 * pow(rscale1, 2 * (i - 1 - nterms1));
+        for (fint j = (nterms1 < i - 1 ? nterms1 : i - 1); j >= 1; j--) {
+            for (fint l = 1; l <= nd; l++) {
+                mbhloc2[i*nd+l-1] +=
+                    (creal(mbhloc1[j*nd+l-1]) * creal(jtemp[i-j])
+                    - cimag(mbhloc1[j*nd+l-1]) * cimag(jtemp[i-j])
+                    + ima * (creal(mbhloc1[j*nd+l-1]) * cimag(jtemp[i-j])
+                    + cimag(mbhloc1[j*nd+l-1]) * creal(jtemp[i-j]))) * fs2;
+                mbhloc2[i*nd+l-1] +=
+                    (creal(mbhloc1[j*nd+l-1]) * creal(jtemp[i+j])
+                    + cimag(mbhloc1[j*nd+l-1]) * cimag(jtemp[i+j])
+                    + ima * (creal(mbhloc1[j*nd+l-1]) * cimag(jtemp[i+j])
+                    - cimag(mbhloc1[j*nd+l-1]) * creal(jtemp[i+j]))) * rsi * rsi7;
+                lloc2[i*nd+l-1] +=
+                    (creal(mbhloc1[j*nd+l-1]) * creal(jtemp[i-j])
+                    - cimag(mbhloc1[j*nd+l-1]) * cimag(jtemp[i-j])
+                    + ima * (creal(mbhloc1[j*nd+l-1]) * cimag(jtemp[i-j])
+                    + cimag(mbhloc1[j*nd+l-1]) * creal(jtemp[i-j]))) * fs2 *
+                    dfac2[i];
+                lloc2[i*nd+l-1] +=
+                    (creal(mbhloc1[j*nd+l-1]) * creal(jtemp[i+j])
+                    + cimag(mbhloc1[j*nd+l-1]) * cimag(jtemp[i+j])
+                    + ima * (creal(mbhloc1[j*nd+l-1]) * cimag(jtemp[i+j])
+                    - cimag(mbhloc1[j*nd+l-1]) * creal(jtemp[i+j])))
+                    * rsi * rsi7 * dfac2[i];
+            }
+            fs2 = fs2 * rscale1 * rscale1;
+        }
+        for (fint j = i; j <= nterms1; j++) {
+            for (fint l = 1; l <= nd; l++) {
+                mbhloc2[i*nd+l-1] +=
+                    (creal(mbhloc1[j*nd+l-1]) * creal(jtemp[j-i])
+                    + cimag(mbhloc1[j*nd+l-1]) * cimag(jtemp[j-i])
+                    - ima * (creal(mbhloc1[j*nd+l-1]) * cimag(jtemp[j-i])
+                    - cimag(mbhloc1[j*nd+l-1]) * creal(jtemp[j-i]))) * rsi5;
+                lloc2[i*nd+l-1] +=
+                    (creal(mbhloc1[j*nd+l-1]) * creal(difftemp[j-i])
+                    + cimag(mbhloc1[j*nd+l-1]) * cimag(difftemp[j-i])
+                    - ima * (creal(mbhloc1[j*nd+l-1]) * cimag(difftemp[j-i])
+                    - cimag(mbhloc1[j*nd+l-1]) * creal(difftemp[j-i]))) * rsi5
+                    * dfac2[i];
+                lloc2[i*nd+l-1] +=
+                    (creal(lloc1[j*nd+l-1]) * creal(powtemp[j-i])
+                    + cimag(lloc1[j*nd+l-1]) * cimag(powtemp[j-i])
+                    - ima * (creal(lloc1[j*nd+l-1]) * cimag(powtemp[j-i])
+                    - cimag(lloc1[j*nd+l-1]) * creal(powtemp[j-i])))
+                    * carray[i * (ldc + 1) + j] * rsi5;
+                mbhloc2[i*nd+l-1] +=
+                    (creal(mbhloc1[j*nd+l-1]) * creal(jtemp[i+j])
+                    + cimag(mbhloc1[j*nd+l-1]) * cimag(jtemp[i+j])
+                    + ima * (creal(mbhloc1[j*nd+l-1]) * cimag(jtemp[i+j])
+                    - cimag(mbhloc1[j*nd+l-1]) * creal(jtemp[i+j]))) * rsi * rsi7;
+                lloc2[i*nd+l-1] +=
+                    (creal(mbhloc1[j*nd+l-1]) * creal(jtemp[i+j])
+                    + cimag(mbhloc1[j*nd+l-1]) * cimag(jtemp[i+j])
+                    + ima * (creal(mbhloc1[j*nd+l-1]) * cimag(jtemp[i+j])
+                    - cimag(mbhloc1[j*nd+l-1]) * creal(jtemp[i+j])))
+                    * rsi * rsi7 * dfac2[i];
+            }
+        }
+        rsi = rsi * rscale1;
+        rsi7 = rsi7 * rscale2;
+        rsi5 = rsi5 * rscale2 / rscale1;
+    }
+
+    free(jtemp); free(difftemp); free(powtemp);
+    free(diffs); free(ival); free(pow_arr); free(dpow_arr);
+    free(pow2); free(dfac2);
+}

@@ -23,13 +23,14 @@ provides.
 ## What's in `c_translation/`
 
 A C99 port of the subset of fmm2d needed to support five MATLAB entry
-points:
+points plus the modified biharmonic FMM:
 
 - [`matlab/rfmm2d.m`](../matlab/rfmm2d.m) — real-valued 2D Laplace FMM
 - [`matlab/cfmm2d.m`](../matlab/cfmm2d.m) — complex Cauchy-kernel Laplace FMM
 - [`matlab/lfmm2d.m`](../matlab/lfmm2d.m) — log-kernel Laplace FMM with complex densities
 - [`matlab/stfmm2d.m`](../matlab/stfmm2d.m) — 2D Stokes FMM
 - [`matlab/hfmm2d.m`](../matlab/hfmm2d.m) — 2D Helmholtz FMM
+- `mbhfmm2d` — 2D modified biharmonic FMM (no MATLAB wrapper in upstream; Fortran callable)
 
 The C library is a **drop-in replacement** for the corresponding
 Fortran objects: same symbol names, same calling convention, same
@@ -43,7 +44,7 @@ points, adding routines), see [TRANSLATION_GUIDE.md](TRANSLATION_GUIDE.md).
 
 ## Status
 
-35 of the original Fortran source files have been translated. Every
+36 of the original Fortran source files have been translated. Every
 translated routine has been verified against its Fortran original with
 a bit-for-bit differential test, and the assembled C library has been
 verified end-to-end against `test/laplace/test_rfmm2d.f` plus four
@@ -85,7 +86,8 @@ custom matlab-path smoke tests (one per entry point).
 | 32 | [src/stokes/stokkernels2d.f](../src/stokes/stokkernels2d.f) | [src/stokkernels2d.c](src/stokkernels2d.c) | 2 | 338 → ~173 |
 | 33 | [src/modified-biharmonic/mbhgreen2d.f](../src/modified-biharmonic/mbhgreen2d.f) | [src/mbhgreen2d.c](src/mbhgreen2d.c) | 9 | 1024 → ~781 |
 | 34 | [src/modified-biharmonic/mbhkernels2d.f](../src/modified-biharmonic/mbhkernels2d.f) | [src/mbhkernels2d.c](src/mbhkernels2d.c) | 48 | 5437 → ~3467 |
-| 35 | [src/modified-biharmonic/mbhrouts2d.f](../src/modified-biharmonic/mbhrouts2d.f) | [src/mbhrouts2d.c](src/mbhrouts2d.c) | 14 of 16 | 1957 → ~1155 |
+| 35 | [src/modified-biharmonic/mbhrouts2d.f](../src/modified-biharmonic/mbhrouts2d.f) | [src/mbhrouts2d.c](src/mbhrouts2d.c) | 16 | 1957 → ~1428 |
+| 36 | [src/modified-biharmonic/mbhfmm2d.f](../src/modified-biharmonic/mbhfmm2d.f) | [src/mbhfmm2d.c](src/mbhfmm2d.c) | 5 | 1429 → ~928 |
 
 Routines listed as "N of M" mean only the routines reachable from the
 target entry-point call graphs were translated; the rest are unused
@@ -227,13 +229,6 @@ the original at link time.
 - **OpenMP parallelism.** All `c$omp` directives in the original are
   comments. The C library is sequential. Adding OpenMP (`#pragma omp`)
   is a separate pass.
-- **Modified-biharmonic FMM (`mbhfmm2d`).** The Green's function
-  evaluations (`mbhgreen2d`), direct kernel evaluators
-  (`mbhkernels2d`, all 48 routines), and most multipole/local
-  routines (`mbhrouts2d`) are translated. Two complex translation
-  routines (`mbh2dmploc_vec`, `mbh2dlocloc_vec`) currently delegate
-  to the Fortran originals. The main FMM driver (`mbhfmm2d.f`)
-  is not yet translated.
 - **Static archive packaging.** `make dropin` produces individual `.o`
   files but does not bundle them into a `libfmm2d_c.a`. Trivial follow-up.
 - **MATLAB MEX glue.** The C library exports the right symbols, but

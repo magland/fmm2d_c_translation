@@ -105,7 +105,7 @@ C_OBJS  = $(patsubst $(SRCDIR)/%.c,$(BUILD)/%.o,$(C_SRCS))
 # Modified-biharmonic tests are handled by explicit rules below
 # because they need extra link objects (not in libfmm2d.a).
 TEST_SRCS = $(wildcard $(TESTDIR)/test_*.f)
-MBH_TEST_NAMES = test_mbhgreen2d test_mbhkernels2d test_mbhrouts2d
+MBH_TEST_NAMES = test_mbhgreen2d test_mbhkernels2d test_mbhrouts2d test_mbhfmm2d
 MBH_TEST_BINS = $(patsubst %,$(BUILD)/%,$(MBH_TEST_NAMES))
 TEST_BINS = $(filter-out $(MBH_TEST_BINS),$(patsubst $(TESTDIR)/test_%.f,$(BUILD)/test_%,$(TEST_SRCS)))
 

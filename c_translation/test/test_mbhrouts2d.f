@@ -38,6 +38,11 @@ c     for mpeval/taeval
       real *8 pot_f(3, 10), pot_c(3, 10)
       real *8 grad_f(3, 2, 10), grad_c(3, 2, 10)
 
+c     for mploc/locloc
+      complex *16 mbhloc_f(3, 0:5), mbhloc_c(3, 0:5)
+      complex *16 lloc_f(3, 0:5), lloc_c(3, 0:5)
+      real *8 rscale2, center2(2)
+
       real *8 errmax, e, tol
       tol = 1.0d-13
 
@@ -256,6 +261,73 @@ c     ---- taeval_g ----
          if (e .gt. errmax) errmax = e
       enddo
       call report('taevalg      ', errmax, nfail)
+
+c     ---- mploc ----
+      nterms = 3
+      nd = 2
+      rscale = 1.0d0
+      rscale2 = 1.0d0
+      center(1) = 0.0d0
+      center(2) = 0.0d0
+      center2(1) = 5.0d0
+      center2(2) = 5.0d0
+c     mbhmpole, ympole still populated from mpeval test
+      do j = 0, nterms
+         do k = 1, nd
+            mbhloc_f(k, j) = (0.0d0, 0.0d0)
+            mbhloc_c(k, j) = (0.0d0, 0.0d0)
+            lloc_f(k, j) = (0.0d0, 0.0d0)
+            lloc_c(k, j) = (0.0d0, 0.0d0)
+         enddo
+      enddo
+      call mbh2dmploc_vec(nd, beta, rscale, center,
+     1   mbhmpole, ympole, nterms,
+     2   rscale2, center2, mbhloc_f, lloc_f, nterms)
+      call mbh2dmploc_vec_c(nd, beta, rscale, center,
+     1   mbhmpole, ympole, nterms,
+     2   rscale2, center2, mbhloc_c, lloc_c, nterms)
+      errmax = 0.0d0
+      do j = 0, nterms
+         do k = 1, nd
+            e = cdabs(mbhloc_f(k,j) - mbhloc_c(k,j))
+            if (e .gt. errmax) errmax = e
+            e = cdabs(lloc_f(k,j) - lloc_c(k,j))
+            if (e .gt. errmax) errmax = e
+         enddo
+      enddo
+      call report('mploc        ', errmax, nfail)
+
+c     ---- locloc ----
+      center(1) = 0.0d0
+      center(2) = 0.0d0
+      center2(1) = 0.5d0
+      center2(2) = 0.3d0
+      do j = 0, nterms
+         do k = 1, nd
+            mbhloc_f(k, j) = (0.0d0, 0.0d0)
+            mbhloc_c(k, j) = (0.0d0, 0.0d0)
+            lloc_f(k, j) = (0.0d0, 0.0d0)
+            lloc_c(k, j) = (0.0d0, 0.0d0)
+         enddo
+      enddo
+      call mbh2dlocloc_vec(nd, beta, rscale, center,
+     1   mbhmpole, ympole, nterms,
+     2   rscale2, center2, mbhloc_f, lloc_f, nterms,
+     3   carray_f, ldc)
+      call mbh2dlocloc_vec_c(nd, beta, rscale, center,
+     1   mbhmpole, ympole, nterms,
+     2   rscale2, center2, mbhloc_c, lloc_c, nterms,
+     3   carray_f, ldc)
+      errmax = 0.0d0
+      do j = 0, nterms
+         do k = 1, nd
+            e = cdabs(mbhloc_f(k,j) - mbhloc_c(k,j))
+            if (e .gt. errmax) errmax = e
+            e = cdabs(lloc_f(k,j) - lloc_c(k,j))
+            if (e .gt. errmax) errmax = e
+         enddo
+      enddo
+      call report('locloc       ', errmax, nfail)
 
       if (nfail .gt. 0) then
          write(*,*) 'FAIL: ',nfail,
