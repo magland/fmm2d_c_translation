@@ -77,6 +77,12 @@ FORT_SRC_bhkernels2d     = $(ROOT)/src/biharmonic/bhkernels2d.f
 FORT_SRC_bhrouts2d       = $(ROOT)/src/biharmonic/bhrouts2d.f
 FORT_SRC_bhfmm2d         = $(ROOT)/src/biharmonic/bhfmm2d.f
 FORT_SRC_stfmm2d         = $(ROOT)/src/stokes/stfmm2d.f
+FORT_SRC_hank103         = $(ROOT)/src/common/hank103.f
+FORT_SRC_cdjseval2d      = $(ROOT)/src/common/cdjseval2d.f
+FORT_SRC_h2dcommon       = $(ROOT)/src/helmholtz/h2dcommon.f
+FORT_SRC_h2dterms        = $(ROOT)/src/helmholtz/h2dterms.f
+FORT_SRC_helmkernels2d   = $(ROOT)/src/helmholtz/helmkernels2d.f
+FORT_SRC_helmrouts2d     = $(ROOT)/src/helmholtz/helmrouts2d.f
 
 # Each translated file is listed here as it gets added.
 C_SRCS  = $(wildcard $(SRCDIR)/*.c)
@@ -202,6 +208,18 @@ $(BUILD)/bhrouts2d_ref.o: $(FORT_SRC_bhrouts2d) | $(BUILD)
 $(BUILD)/bhfmm2d_ref.o: $(FORT_SRC_bhfmm2d) | $(BUILD)
 	$(FC) $(FFLAGS_REF) -c $< -o $@
 $(BUILD)/stfmm2d_ref.o: $(FORT_SRC_stfmm2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/hank103_ref.o: $(FORT_SRC_hank103) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/cdjseval2d_ref.o: $(FORT_SRC_cdjseval2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/h2dcommon_ref.o: $(FORT_SRC_h2dcommon) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/h2dterms_ref.o: $(FORT_SRC_h2dterms) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/helmkernels2d_ref.o: $(FORT_SRC_helmkernels2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/helmrouts2d_ref.o: $(FORT_SRC_helmrouts2d) | $(BUILD)
 	$(FC) $(FFLAGS_REF) -c $< -o $@
 
 .SECONDARY:
