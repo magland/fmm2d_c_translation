@@ -22,13 +22,14 @@ provides.
 
 ## What's in `c_translation/`
 
-A C99 port of the subset of fmm2d needed to support four MATLAB entry
+A C99 port of the subset of fmm2d needed to support five MATLAB entry
 points:
 
 - [`matlab/rfmm2d.m`](../matlab/rfmm2d.m) — real-valued 2D Laplace FMM
 - [`matlab/cfmm2d.m`](../matlab/cfmm2d.m) — complex Cauchy-kernel Laplace FMM
 - [`matlab/lfmm2d.m`](../matlab/lfmm2d.m) — log-kernel Laplace FMM with complex densities
 - [`matlab/stfmm2d.m`](../matlab/stfmm2d.m) — 2D Stokes FMM
+- [`matlab/hfmm2d.m`](../matlab/hfmm2d.m) — 2D Helmholtz FMM
 
 The C library is a **drop-in replacement** for the corresponding
 Fortran objects: same symbol names, same calling convention, same
@@ -42,7 +43,7 @@ points, adding routines), see [TRANSLATION_GUIDE.md](TRANSLATION_GUIDE.md).
 
 ## Status
 
-17 of the original Fortran source files have been translated. Every
+28 of the original Fortran source files have been translated. Every
 translated routine has been verified against its Fortran original with
 a bit-for-bit differential test, and the assembled C library has been
 verified end-to-end against `test/laplace/test_rfmm2d.f` plus four
@@ -68,6 +69,16 @@ custom matlab-path smoke tests (one per entry point).
 | 16 | [src/biharmonic/bhrouts2d.f](../src/biharmonic/bhrouts2d.f) | [src/bhrouts2d.c](src/bhrouts2d.c) | 14 | 1465 → ~840 |
 | 17 | [src/biharmonic/bhfmm2d.f](../src/biharmonic/bhfmm2d.f) | [src/bhfmm2d.c](src/bhfmm2d.c) | 4 | 1531 → ~880 |
 | 18 | [src/stokes/stfmm2d.f](../src/stokes/stfmm2d.f) | [src/stfmm2d.c](src/stfmm2d.c) | 1 | 345 → ~270 |
+| 19 | [src/common/hank103.f](../src/common/hank103.f) | [src/hank103.c](src/hank103.c) | 8 | 957 → ~790 |
+| 20 | [src/common/cdjseval2d.f](../src/common/cdjseval2d.f) | [src/cdjseval2d.c](src/cdjseval2d.c) | 1 | 205 → ~140 |
+| 21 | [src/helmholtz/h2dcommon.f](../src/helmholtz/h2dcommon.f) | [src/h2dcommon.c](src/h2dcommon.c) | 4 | 237 → ~120 |
+| 22 | [src/helmholtz/h2dterms.f](../src/helmholtz/h2dterms.f) | [src/h2dterms.c](src/h2dterms.c) | 1 of 6 | 564 → ~70 |
+| 23 | [src/helmholtz/helmkernels2d.f](../src/helmholtz/helmkernels2d.f) | [src/helmkernels2d.c](src/helmkernels2d.c) | 9 | 904 → ~620 |
+| 24 | [src/helmholtz/helmrouts2d.f](../src/helmholtz/helmrouts2d.f) | [src/helmrouts2d.c](src/helmrouts2d.c) | 21 | 1803 → ~840 |
+| 25 | [src/common/next235.f](../src/common/next235.f) | [src/next235.c](src/next235.c) | 1 | 28 → ~30 |
+| 26 | [src/helmholtz/wideband2d.f](../src/helmholtz/wideband2d.f) | [src/wideband2d.c](src/wideband2d.c) | 8 | 537 → ~270 |
+| 27 | [src/helmholtz/hfmm2d.f](../src/helmholtz/hfmm2d.f) | [src/hfmm2d.c](src/hfmm2d.c) | 5 | 1988 → ~1900 |
+| 28 | [src/helmholtz/hfmm2d_ndiv.f](../src/helmholtz/hfmm2d_ndiv.f) | [src/hfmm2d_ndiv.c](src/hfmm2d_ndiv.c) | 1 | 447 → ~340 |
 
 Routines listed as "N of M" mean only the routines reachable from the
 target entry-point call graphs were translated; the rest are unused
@@ -209,12 +220,10 @@ the original at link time.
 - **OpenMP parallelism.** All `c$omp` directives in the original are
   comments. The C library is sequential. Adding OpenMP (`#pragma omp`)
   is a separate pass.
-- **Other entry points.** The Helmholtz FMM (`hfmm2d` and friends)
-  and modified-biharmonic FMM (`mbhfmm2d`) are not translated. Both
-  the Helmholtz and modified-biharmonic entry points are substantial
-  ports — Helmholtz introduces Hankel function evaluation
-  (`hank103.f`), and modified-biharmonic introduces its own
-  multipole/local routine set.
+- **Other entry points.** The modified-biharmonic FMM (`mbhfmm2d`)
+  is not translated. It introduces its own multipole/local routine
+  set. The Helmholtz FMM (`hfmm2d`) and all its dependencies are
+  now fully translated.
 - **Static archive packaging.** `make dropin` produces individual `.o`
   files but does not bundle them into a `libfmm2d_c.a`. Trivial follow-up.
 - **MATLAB MEX glue.** The C library exports the right symbols, but
