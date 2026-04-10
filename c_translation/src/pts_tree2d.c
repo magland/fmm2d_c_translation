@@ -85,7 +85,10 @@ void FNAME(pts_tree_mem)(const double *src, const fint *ns,
     fint i, j;
     fint nbloc, nbctr, nbadd, irefine, ilev, ifirstbox, ilastbox;
     fint nbtot;
-    fint ibox, nn, nss, ntt;
+    /* nn is set by one of three branches keyed on idivflag (0, 1, or 2);
+       initializing to 0 silences a -Wmaybe-uninitialized warning and
+       gives deterministic behavior for any out-of-range idivflag. */
+    fint ibox, nn = 0, nss, ntt;
     double sizey;
     double xmin, xmax, ymin, ymax;
     double xmin2, xmax2, ymin2, ymax2;
@@ -465,7 +468,8 @@ void FNAME(pts_tree_build)(const double *src, const fint *ns,
     fint i, ilev, irefine, j;
     fint ifirstbox, ilastbox, nbctr, nbloc;
     fint nboxes0;
-    fint ibox, nn, nss, ntt;
+    /* See note on nn in pts_tree_mem above. */
+    fint ibox, nn = 0, nss, ntt;
 
     double xmin, xmax, ymin, ymax, sizey;
 

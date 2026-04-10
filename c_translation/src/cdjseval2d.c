@@ -29,7 +29,11 @@ void FNAME(jbessel2d)(const fint *nterms_p, const fcomplex *z_p,
     int ntop, nextra, ncntr;
     double dcoef, dd, scalinv, sctot, dc1, dc2;
     fcomplex zinv, ztmp, ffn, ffnm1, ffnp1;
-    fcomplex psi, zmul, zsn, zmulinv, zscale;
+    /* zscale is set by one of two branches keyed on cimag(z_v) (< 0 or >= 0).
+       These are exhaustive for finite doubles but neither is true if
+       cimag(z_v) is NaN. Initializing to 0 silences a -Wmaybe-uninitialized
+       warning under -O3 and gives deterministic behavior in the NaN edge case. */
+    fcomplex psi, zmul, zsn, zmulinv, zscale = 0;
 
     int *iscale;
     fcomplex *fjtemp;

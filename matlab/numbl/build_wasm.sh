@@ -49,7 +49,19 @@ DEFS="-DMX_HAS_INTERLEAVED_COMPLEX=1 -DMWF77_UNDERSCORE1 -DMWF77_RETURN=void"
 # Step 1: compile each c_translation .c file with -DFMM2D_DROP_IN so it
 # exports the bare Fortran ABI symbol name (e.g. rfmm2d_ndiv_, not
 # rfmm2d_ndiv_c_).
-CFLAGS="-O3 -std=c99 -DFMM2D_DROP_IN -msimd128 -Wno-unused-parameter -Wno-unused-variable"
+#
+# -fno-strict-aliasing: the rmlexp workspace is declared `double *` in
+#   Fortran but holds complex multipole/local expansion data that is
+#   accessed via `(fcomplex *)` casts (~136 sites across cfmm2d.c,
+#   hfmm2d.c, mbhfmm2d.c, etc.). Without this flag, clang's strict
+#   aliasing analysis at -O3 may reorder reads/writes assuming the
+#   double* and fcomplex* views don't overlap, silently corrupting
+#   expansion data.
+# -fwrapv: a few index/size computations on int32 `fint` values could
+#   overflow on large workloads. -fwrapv defines signed overflow as
+#   two's-complement wrap, eliminating UB and the related -O3 optimizer
+#   assumptions. Must match the c_translation/Makefile DROPIN_CFLAGS.
+CFLAGS="-O3 -std=c99 -DFMM2D_DROP_IN -msimd128 -fno-strict-aliasing -fwrapv -Wno-unused-parameter -Wno-unused-variable"
 INCLUDES="-I$CT_DIR/include"
 
 OBJS=()
@@ -60,15 +72,6 @@ for src in "$CT_DIR"/src/*.c; do
   emcc $CFLAGS $INCLUDES -c "$src" -o "$obj"
   OBJS+=("$obj")
 done
-
-# Stubs for symbols not yet ported to C (l2d_*, r2d_*, st2d_* direct
-# evaluators, FFT routines from dfft_threadsafe.f).
-# These let fmm2d.o link cleanly; calling them at runtime raises an error.
-echo "  CC  wasm_stubs.c"
-WASM_STUBS_OBJ="$BUILD_DIR/wasm_stubs.o"
-emcc -O3 -std=c99 -msimd128 -Wno-unused-parameter \
-     -c "$SCRIPT_DIR/wasm_stubs.c" -o "$WASM_STUBS_OBJ"
-OBJS+=("$WASM_STUBS_OBJ")
 
 # Step 2: compile the upstream MEX source against our mex shim.
 echo "  CC  fmm2d.c"

@@ -30,7 +30,17 @@ CC      = gcc
 FC      = gfortran
 
 # Production flags (used to build the C translation as it would ship).
+# -fno-strict-aliasing: the rmlexp workspace is declared `double *` in
+#   Fortran but holds complex multipole/local expansion data that is
+#   accessed via `(fcomplex *)` casts. This is technically a strict-
+#   aliasing violation; the flag tells gcc not to optimize on the
+#   assumption that distinct pointer types never alias.
+# -fwrapv: a few index/size computations on int32 `fint` values could
+#   overflow on large workloads. -fwrapv defines signed overflow as
+#   two's-complement wrap, eliminating the UB and the related -O3
+#   optimizer assumptions.
 CFLAGS_PROD = -std=c99 -O3 -march=native -funroll-loops -fPIC \
+              -fno-strict-aliasing -fwrapv \
               -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable
 
 # Diff-test flags (used for the bit-identical correctness check).
@@ -121,6 +131,7 @@ all: $(C_OBJS) $(TEST_BINS) $(MBH_TEST_BINS)
 DROPIN_DIR = $(BUILD)/dropin
 DROPIN_OBJS = $(patsubst $(SRCDIR)/%.c,$(DROPIN_DIR)/%.o,$(C_SRCS))
 DROPIN_CFLAGS = -std=c99 -O3 -march=native -funroll-loops -fPIC \
+                -fno-strict-aliasing -fwrapv \
                 -DFMM2D_DROP_IN \
                 -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable
 
