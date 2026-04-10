@@ -85,6 +85,8 @@ FORT_SRC_helmkernels2d   = $(ROOT)/src/helmholtz/helmkernels2d.f
 FORT_SRC_helmrouts2d     = $(ROOT)/src/helmholtz/helmrouts2d.f
 FORT_SRC_next235         = $(ROOT)/src/common/next235.f
 FORT_SRC_wideband2d      = $(ROOT)/src/helmholtz/wideband2d.f
+FORT_SRC_hfmm2d          = $(ROOT)/src/helmholtz/hfmm2d.f
+FORT_SRC_hfmm2d_ndiv     = $(ROOT)/src/helmholtz/hfmm2d_ndiv.f
 
 # Each translated file is listed here as it gets added.
 C_SRCS  = $(wildcard $(SRCDIR)/*.c)
@@ -226,6 +228,10 @@ $(BUILD)/helmrouts2d_ref.o: $(FORT_SRC_helmrouts2d) | $(BUILD)
 $(BUILD)/next235_ref.o: $(FORT_SRC_next235) | $(BUILD)
 	$(FC) $(FFLAGS_REF) -c $< -o $@
 $(BUILD)/wideband2d_ref.o: $(FORT_SRC_wideband2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/hfmm2d_ref.o: $(FORT_SRC_hfmm2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/hfmm2d_ndiv_ref.o: $(FORT_SRC_hfmm2d_ndiv) | $(BUILD)
 	$(FC) $(FFLAGS_REF) -c $< -o $@
 
 .SECONDARY:
