@@ -91,6 +91,10 @@ FORT_SRC_dfft_threadsafe = $(ROOT)/src/common/dfft_threadsafe.f
 FORT_SRC_lapkernels2d    = $(ROOT)/src/laplace/lapkernels2d.f
 FORT_SRC_rlapkernels2d   = $(ROOT)/src/laplace/rlapkernels2d.f
 FORT_SRC_stokkernels2d   = $(ROOT)/src/stokes/stokkernels2d.f
+FORT_SRC_mbhgreen2d      = $(ROOT)/src/modified-biharmonic/mbhgreen2d.f
+FORT_SRC_mbhkernels2d    = $(ROOT)/src/modified-biharmonic/mbhkernels2d.f
+FORT_SRC_mbhrouts2d      = $(ROOT)/src/modified-biharmonic/mbhrouts2d.f
+FORT_SRC_mbhfmm2d        = $(ROOT)/src/modified-biharmonic/mbhfmm2d.f
 
 # Each translated file is listed here as it gets added.
 C_SRCS  = $(wildcard $(SRCDIR)/*.c)
@@ -98,12 +102,16 @@ C_OBJS  = $(patsubst $(SRCDIR)/%.c,$(BUILD)/%.o,$(C_SRCS))
 
 # Each diff test driver is one Fortran main per translated file,
 # named test_<file>.f. Build them all as standalone executables.
+# Modified-biharmonic tests are handled by explicit rules below
+# because they need extra link objects (not in libfmm2d.a).
 TEST_SRCS = $(wildcard $(TESTDIR)/test_*.f)
-TEST_BINS = $(patsubst $(TESTDIR)/test_%.f,$(BUILD)/test_%,$(TEST_SRCS))
+MBH_TEST_NAMES = test_mbhgreen2d test_mbhkernels2d test_mbhrouts2d
+MBH_TEST_BINS = $(patsubst %,$(BUILD)/%,$(MBH_TEST_NAMES))
+TEST_BINS = $(filter-out $(MBH_TEST_BINS),$(patsubst $(TESTDIR)/test_%.f,$(BUILD)/test_%,$(TEST_SRCS)))
 
 .PHONY: all tests clean dropin e2e
 
-all: $(C_OBJS) $(TEST_BINS)
+all: $(C_OBJS) $(TEST_BINS) $(MBH_TEST_BINS)
 
 # Drop-in build: compile each C source at -O3 with -DFMM2D_DROP_IN so
 # the resulting objects export the bare Fortran symbol names (e.g.
@@ -245,8 +253,39 @@ $(BUILD)/rlapkernels2d_ref.o: $(FORT_SRC_rlapkernels2d) | $(BUILD)
 	$(FC) $(FFLAGS_REF) -c $< -o $@
 $(BUILD)/stokkernels2d_ref.o: $(FORT_SRC_stokkernels2d) | $(BUILD)
 	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/mbhgreen2d_ref.o: $(FORT_SRC_mbhgreen2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/mbhkernels2d_ref.o: $(FORT_SRC_mbhkernels2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/mbhrouts2d_ref.o: $(FORT_SRC_mbhrouts2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
+$(BUILD)/mbhfmm2d_ref.o: $(FORT_SRC_mbhfmm2d) | $(BUILD)
+	$(FC) $(FFLAGS_REF) -c $< -o $@
 
 .SECONDARY:
+
+# Modified-biharmonic: these sources are not in libfmm2d.a, so the diff
+# tests need explicit extra objects on the link line.
+$(BUILD)/test_mbhgreen2d: $(TESTDIR)/test_mbhgreen2d.f $(BUILD)/mbhgreen2d.o $(BUILD)/mbhgreen2d_ref.o $(FMMLIB) | $(BUILD)
+	$(FC) $(FFLAGS_REF) $< $(BUILD)/mbhgreen2d.o $(BUILD)/mbhgreen2d_ref.o \
+	    $(TESTOBJS) $(FMMLIB) -lm -o $@
+
+$(BUILD)/test_mbhkernels2d: $(TESTDIR)/test_mbhkernels2d.f $(BUILD)/mbhkernels2d.o $(BUILD)/mbhkernels2d_ref.o $(BUILD)/mbhgreen2d.o $(BUILD)/mbhgreen2d_ref.o $(FMMLIB) | $(BUILD)
+	$(FC) $(FFLAGS_REF) $< $(BUILD)/mbhkernels2d.o $(BUILD)/mbhkernels2d_ref.o \
+	    $(BUILD)/mbhgreen2d.o $(BUILD)/mbhgreen2d_ref.o \
+	    $(TESTOBJS) $(FMMLIB) -lm -o $@
+
+$(BUILD)/test_mbhrouts2d: $(TESTDIR)/test_mbhrouts2d.f $(BUILD)/mbhrouts2d.o $(BUILD)/mbhrouts2d_ref.o $(BUILD)/mbhgreen2d.o $(BUILD)/mbhgreen2d_ref.o $(FMMLIB) | $(BUILD)
+	$(FC) $(FFLAGS_REF) $< $(BUILD)/mbhrouts2d.o $(BUILD)/mbhrouts2d_ref.o \
+	    $(BUILD)/mbhgreen2d.o $(BUILD)/mbhgreen2d_ref.o \
+	    $(TESTOBJS) $(FMMLIB) -lm -o $@
+
+$(BUILD)/test_mbhfmm2d: $(TESTDIR)/test_mbhfmm2d.f $(BUILD)/mbhfmm2d.o $(BUILD)/mbhfmm2d_ref.o $(BUILD)/mbhgreen2d.o $(BUILD)/mbhgreen2d_ref.o $(BUILD)/mbhkernels2d.o $(BUILD)/mbhkernels2d_ref.o $(BUILD)/mbhrouts2d.o $(BUILD)/mbhrouts2d_ref.o $(FMMLIB) | $(BUILD)
+	$(FC) $(FFLAGS_REF) $< $(BUILD)/mbhfmm2d.o $(BUILD)/mbhfmm2d_ref.o \
+	    $(BUILD)/mbhgreen2d.o $(BUILD)/mbhgreen2d_ref.o \
+	    $(BUILD)/mbhkernels2d.o $(BUILD)/mbhkernels2d_ref.o \
+	    $(BUILD)/mbhrouts2d.o $(BUILD)/mbhrouts2d_ref.o \
+	    $(TESTOBJS) $(FMMLIB) -lm -o $@
 
 # Build a diff test. The link order matters: the -O0 Fortran reference
 # (`%_ref.o`) is named on the command line BEFORE libfmm2d.a, so the
@@ -265,8 +304,8 @@ $(TEST_BINS): $(BUILD)/test_%: $(TESTDIR)/test_%.f $(BUILD)/%.o $(BUILD)/%_ref.o
 $(BUILD):
 	mkdir -p $(BUILD)
 
-tests: $(TEST_BINS)
-	@set -e; for t in $(TEST_BINS); do \
+tests: $(TEST_BINS) $(MBH_TEST_BINS)
+	@set -e; for t in $(TEST_BINS) $(MBH_TEST_BINS); do \
 	  echo "==> $$t"; \
 	  $$t; \
 	done
