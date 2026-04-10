@@ -61,9 +61,9 @@ for src in "$CT_DIR"/src/*.c; do
   OBJS+=("$obj")
 done
 
-# Stubs for the Fortran entry points c_translation does not yet port
-# (hfmm2d_ndiv, h2d_*, l2d_*, r2d_*, c2d_*, st2d_* direct evaluators).
-# These let fmm2d.o link cleanly; calling them at runtime sets *ier=1.
+# Stubs for symbols not yet ported to C (l2d_*, r2d_*, st2d_* direct
+# evaluators, FFT routines from dfft_threadsafe.f).
+# These let fmm2d.o link cleanly; calling them at runtime raises an error.
 echo "  CC  wasm_stubs.c"
 WASM_STUBS_OBJ="$BUILD_DIR/wasm_stubs.o"
 emcc -O3 -std=c99 -msimd128 -Wno-unused-parameter \

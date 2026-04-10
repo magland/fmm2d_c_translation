@@ -27,75 +27,22 @@ extern void mexErrMsgTxt(const char *msg);
 #define STUB_NOT_IMPLEMENTED(name) \
     mexErrMsgTxt("fmm2d wasm: " name " is not yet ported to C/wasm")
 
-/* ── Helmholtz FMM driver ─────────────────────────────────────────── */
+/* ── Helmholtz stubs removed: real implementations now in
+      c_translation/src/hfmm2d_ndiv.c and helmkernels2d.c ────────── */
 
-void hfmm2d_ndiv_(int *nd, double *eps, dcomplex *zk,
-                  int *ifcharge, double *sources,
-                  int *ns, dcomplex *charge,
-                  int *ifdipole, dcomplex *dipstr, double *dipvec,
-                  int *iper, int *ifpgh,
-                  dcomplex *pot, dcomplex *grad, dcomplex *hess,
-                  int *nt, double *targ, int *ifpghtarg,
-                  dcomplex *pottarg, dcomplex *gradtarg, dcomplex *hesstarg,
-                  int *ndiv, int *idivflag, int *ifnear,
-                  double *timeinfo, int *ier) {
-    STUB_NOT_IMPLEMENTED("hfmm2d_ndiv");
-}
+/* ── FFT routines from dfft_threadsafe.f (not yet translated) ───── */
+/* These are only called from the wideband high-frequency path in
+   hfmm2d when boxsize/wavelength > 16. For low-frequency problems
+   (the common case), these are never reached. */
 
-/* ── Helmholtz direct evaluators (h2d_direct*) ────────────────────── */
-
-void h2d_directcp_(int *nd, dcomplex *zk, double *sources,
-                   int *ns, dcomplex *charge, double *targ,
-                   int *nt, dcomplex *pot, double *thresh) {
-    STUB_NOT_IMPLEMENTED("h2d_directcp");
+void zffti_(int *n, dcomplex *wsave) {
+    STUB_NOT_IMPLEMENTED("zffti (FFT init — high-frequency path)");
 }
-void h2d_directdp_(int *nd, dcomplex *zk, double *sources,
-                   int *ns, dcomplex *dipstr, double *dipvec,
-                   double *targ, int *nt, dcomplex *pot, double *thresh) {
-    STUB_NOT_IMPLEMENTED("h2d_directdp");
+void zfftf_(int *n, dcomplex *c, dcomplex *wsave) {
+    STUB_NOT_IMPLEMENTED("zfftf (FFT forward — high-frequency path)");
 }
-void h2d_directcdp_(int *nd, dcomplex *zk, double *sources,
-                    int *ns, dcomplex *charge, dcomplex *dipstr,
-                    double *dipvec, double *targ, int *nt,
-                    dcomplex *pot, double *thresh) {
-    STUB_NOT_IMPLEMENTED("h2d_directcdp");
-}
-void h2d_directcg_(int *nd, dcomplex *zk, double *sources,
-                   int *ns, dcomplex *charge, double *targ, int *nt,
-                   dcomplex *pot, dcomplex *grad, double *thresh) {
-    STUB_NOT_IMPLEMENTED("h2d_directcg");
-}
-void h2d_directdg_(int *nd, dcomplex *zk, double *sources,
-                   int *ns, dcomplex *dipstr, double *dipvec,
-                   double *targ, int *nt,
-                   dcomplex *pot, dcomplex *grad, double *thresh) {
-    STUB_NOT_IMPLEMENTED("h2d_directdg");
-}
-void h2d_directcdg_(int *nd, dcomplex *zk, double *sources,
-                    int *ns, dcomplex *charge, dcomplex *dipstr,
-                    double *dipvec, double *targ, int *nt,
-                    dcomplex *pot, dcomplex *grad, double *thresh) {
-    STUB_NOT_IMPLEMENTED("h2d_directcdg");
-}
-void h2d_directch_(int *nd, dcomplex *zk, double *sources,
-                   int *ns, dcomplex *charge, double *targ, int *nt,
-                   dcomplex *pot, dcomplex *grad, dcomplex *hess,
-                   double *thresh) {
-    STUB_NOT_IMPLEMENTED("h2d_directch");
-}
-void h2d_directdh_(int *nd, dcomplex *zk, double *sources,
-                   int *ns, dcomplex *dipstr, double *dipvec,
-                   double *targ, int *nt,
-                   dcomplex *pot, dcomplex *grad, dcomplex *hess,
-                   double *thresh) {
-    STUB_NOT_IMPLEMENTED("h2d_directdh");
-}
-void h2d_directcdh_(int *nd, dcomplex *zk, double *sources,
-                    int *ns, dcomplex *charge, dcomplex *dipstr,
-                    double *dipvec, double *targ, int *nt,
-                    dcomplex *pot, dcomplex *grad, dcomplex *hess,
-                    double *thresh) {
-    STUB_NOT_IMPLEMENTED("h2d_directcdh");
+void zfftb_(int *n, dcomplex *c, dcomplex *wsave) {
+    STUB_NOT_IMPLEMENTED("zfftb (FFT backward — high-frequency path)");
 }
 
 /* ── Laplace direct evaluators (l2d_direct*) — complex out ────────── */
