@@ -141,12 +141,12 @@ function decodeMxArray(bridge, mx) {
       return RTV.num(bridge.readDoubleScalar(mx));
     }
     if (isCpx) {
-      var re = new FloatXArray(total);
-      var im = new FloatXArray(total);
+      var re = new Float64Array(total);
+      var im = new Float64Array(total);
       bridge.readComplex(mx, total, re, im);
       return RTV.tensor(re, [m, n], im);
     }
-    var data = new FloatXArray(total);
+    var data = new Float64Array(total);
     bridge.readReal(mx, total, data);
     return RTV.tensor(data, [m, n]);
   }
