@@ -1,0 +1,235 @@
+# makefile.f2c -- build flatiron fmm2d via f2c + gcc, run all tests.
+#
+# Usage:
+#   make -f makefile.f2c            # translate, compile, link, run all tests
+#   make -f makefile.f2c translate  # only translate .f -> .c
+#   make -f makefile.f2c objs       # only compile .c -> .o
+#   make -f makefile.f2c bins       # link test executables
+#   make -f makefile.f2c run        # run all tests, write results to RESULTS.f2c
+#   make -f makefile.f2c clean
+
+# --- f2c toolchain ---------------------------------------------------------
+
+F2C      = $(HOME)/linux/repositories/f2c/src/f2c
+F2C_INC  = $(HOME)/linux/repositories/f2c
+F2CFLAGS = -fomp
+# OMP wrapper sources for f2c-generated OpenMP code
+OMP_WRAP_C = $(F2C_INC)/omp_wrappers.c
+
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_S),Darwin)
+  ifeq ($(UNAME_M),arm64)
+    HOMEBREW_PREFIX ?= /opt/homebrew
+  else
+    HOMEBREW_PREFIX ?= /usr/local
+  endif
+  HOMEBREW_GCCS := $(shell ls $(HOMEBREW_PREFIX)/bin/gcc-[0-9]* 2>/dev/null | sort -V)
+  CC_F2C   ?= $(if $(HOMEBREW_GCCS),$(lastword $(HOMEBREW_GCCS)),gcc-14)
+  LIBF2C   ?= $(HOME)/repositories/f2c/libf2c-x86_64/libf2c.a
+  MPFR_LIB ?= -L$(HOMEBREW_PREFIX)/lib -lmpfr
+  GMP_LIB  ?= -L$(HOMEBREW_PREFIX)/lib -lgmp
+  LDFLAGS_EXTRA ?= -Wl,-stack_size,0x20000000
+else
+  CC_F2C   ?= gcc
+  LIBF2C   ?= $(HOME)/repositories/f2c/libf2c-x86_64/libf2c.a
+  MPFR_LIB ?= -lmpfr
+  GMP_LIB  ?= -lgmp
+  LDFLAGS_EXTRA ?=
+endif
+
+# Force C17 on gcc 15+ (C23 default breaks K&R-style externs f2c emits).
+GCC_MAJOR := $(shell $(CC_F2C) -dumpversion 2>/dev/null | cut -d. -f1)
+ifeq ($(shell [ "$(GCC_MAJOR)" -ge 15 ] 2>/dev/null && echo y),y)
+  GCC_STD := -std=gnu17
+endif
+
+CFLAGS = -O3 -march=native $(GCC_STD) -fopenmp -I$(F2C_INC)
+LDLIBS = $(LIBF2C) $(MPFR_LIB) $(GMP_LIB) -lquadmath -lm -lgomp
+
+# --- source layout ---------------------------------------------------------
+
+SRCDIR    = src
+COM       = $(SRCDIR)/common
+HFMM      = $(SRCDIR)/helmholtz
+LFMM      = $(SRCDIR)/laplace
+BHFMM     = $(SRCDIR)/biharmonic
+MBHFMM    = $(SRCDIR)/modified-biharmonic
+STFMM     = $(SRCDIR)/stokes
+TESTDIR   = test
+BUILDDIR  = _f2c_build
+
+# Library sources (all .f under src/, flatlist).
+COM_FSRCS = \
+	$(COM)/cdjseval2d.f $(COM)/cumsum.f $(COM)/dfft_threadsafe.f \
+	$(COM)/dlaran.f $(COM)/fmmcommon2d.f \
+	$(COM)/hank103.f $(COM)/hkrand.f $(COM)/next235.f \
+	$(COM)/prini.f $(COM)/pts_tree2d.f $(COM)/tree_routs2d.f
+# dfft.f intentionally omitted: duplicates symbols from dfft_threadsafe.f
+# (upstream uses dfft_threadsafe.f for the library build).
+
+HFMM_FSRCS = \
+	$(HFMM)/h2dcommon.f $(HFMM)/h2dterms.f $(HFMM)/helmkernels2d.f \
+	$(HFMM)/helmrouts2d.f $(HFMM)/hfmm2d_mps.f $(HFMM)/hfmm2d_mps_ndiv.f \
+	$(HFMM)/hfmm2d_ndiv.f $(HFMM)/hfmm2d.f $(HFMM)/hfmm2dwrap.f \
+	$(HFMM)/hfmm2dwrap_vec.f $(HFMM)/hndiv2d.f $(HFMM)/wideband2d.f
+
+LFMM_FSRCS = \
+	$(LFMM)/cauchykernels2d.f $(LFMM)/cfmm2d.f $(LFMM)/cfmm2d_ndiv.f \
+	$(LFMM)/cfmm2dwrap.f $(LFMM)/cfmm2dwrap_vec.f \
+	$(LFMM)/l2dterms.f $(LFMM)/lapkernels2d.f \
+	$(LFMM)/laprouts2d.f $(LFMM)/lfmm2d.f $(LFMM)/lfmm2d_ndiv.f \
+	$(LFMM)/lfmm2dwrap.f $(LFMM)/lfmm2dwrap_vec.f \
+	$(LFMM)/lndiv2d.f $(LFMM)/rfmm2d.f $(LFMM)/rfmm2d_ndiv.f \
+	$(LFMM)/rfmm2dwrap.f $(LFMM)/rfmm2dwrap_vec.f \
+	$(LFMM)/rlapkernels2d.f
+
+BHFMM_FSRCS = \
+	$(BHFMM)/bh2dterms.f $(BHFMM)/bhfmm2d.f $(BHFMM)/bhfmm2dwrap.f \
+	$(BHFMM)/bhkernels2d.f $(BHFMM)/bhndiv2d.f $(BHFMM)/bhrouts2d.f
+
+MBHFMM_FSRCS = \
+	$(MBHFMM)/mbhfmm2d.f $(MBHFMM)/mbhgreen2d.f \
+	$(MBHFMM)/mbhkernels2d.f $(MBHFMM)/mbhrouts2d.f
+
+STFMM_FSRCS = $(STFMM)/stfmm2d.f $(STFMM)/stokkernels2d.f
+
+SHIM_FSRC = _f2c_shims.f
+
+LIB_FSRCS = $(SHIM_FSRC) $(COM_FSRCS) $(HFMM_FSRCS) $(LFMM_FSRCS) \
+            $(BHFMM_FSRCS) $(MBHFMM_FSRCS) $(STFMM_FSRCS)
+
+# Test sources.
+TEST_FSRCS = \
+	$(TESTDIR)/helmholtz/test_hfmm2d.f \
+	$(TESTDIR)/helmholtz/test_hfmm2d_hf.f \
+	$(TESTDIR)/helmholtz/test_hfmm2d_vec.f \
+	$(TESTDIR)/laplace/test_lfmm2d.f \
+	$(TESTDIR)/laplace/test_lfmm2d_vec.f \
+	$(TESTDIR)/laplace/test_cfmm2d.f \
+	$(TESTDIR)/laplace/test_cfmm2d_vec.f \
+	$(TESTDIR)/laplace/test_rfmm2d.f \
+	$(TESTDIR)/laplace/test_rfmm2d_vec.f \
+	$(TESTDIR)/biharmonic/test_bhfmm2d.f \
+	$(TESTDIR)/biharmonic/test_bhrouts2d.f \
+	$(TESTDIR)/modified-biharmonic/test_mbhfmm2d.f \
+	$(TESTDIR)/modified-biharmonic/test_mbhrouts2d.f \
+	$(TESTDIR)/stokes/test_stfmm2d.f
+
+# F90 test (uses allocatable arrays heavily; may or may not translate).
+TEST_F90 = $(TESTDIR)/helmholtz/test_hfmm2d_mps.f90
+
+# --- derived names ---------------------------------------------------------
+
+# All .f files get flattened into BUILDDIR/<basename>.c (file names are unique).
+LIB_CSRCS  = $(addprefix $(BUILDDIR)/, $(notdir $(LIB_FSRCS:.f=.c)))
+LIB_OBJS   = $(LIB_CSRCS:.c=.o)
+TEST_CSRCS = $(addprefix $(BUILDDIR)/, $(notdir $(TEST_FSRCS:.f=.c)))
+TEST_OBJS  = $(TEST_CSRCS:.c=.o)
+OMP_OBJ    = $(BUILDDIR)/omp_wrappers.o
+
+# Test program names: stripped of "test_" and ".f", prefixed with "int2-".
+TEST_BINS = $(addprefix $(BUILDDIR)/int2-, \
+              $(patsubst test_%.f,%,$(notdir $(TEST_FSRCS))))
+
+# --- top targets -----------------------------------------------------------
+
+.PHONY: all translate objs bins run clean help
+
+all: bins
+	@$(MAKE) -f makefile.f2c --no-print-directory run
+
+help:
+	@echo "Targets: translate | objs | bins | run | clean | all (default)"
+	@echo "Build dir: $(BUILDDIR)/"
+
+translate: $(LIB_CSRCS) $(TEST_CSRCS)
+objs:      $(LIB_OBJS)  $(TEST_OBJS) $(OMP_OBJ)
+bins:      $(TEST_BINS)
+
+$(BUILDDIR):
+	mkdir -p $(BUILDDIR)
+
+# --- f2c translation rules -------------------------------------------------
+# Sed pre-pass rewrites a small set of F90 idioms that f2c doesn't grok:
+#   - `trim(X)` -> `(X)`               (status-string concatenation only;
+#                                      trailing blanks survive but tests
+#                                      don't read the string)
+#   - `maxval(irefinebox(1:nbloc))`    -> `imaxvalh(irefinebox,nbloc)`
+#                                      (provided by _f2c_shims.f)
+F2C_PREP = sed -E \
+  -e 's/trim\(([^()]+)\)/(\1)/g' \
+  -e 's/maxval\(irefinebox\(1:nbloc\)\)/imaxvalh(irefinebox,nbloc)/g'
+
+define f2c_translate
+	@$(F2C_PREP) $< > $(BUILDDIR)/$(notdir $<)
+	@cd $(BUILDDIR) && $(F2C) $(F2CFLAGS) $(notdir $<) >/dev/null 2>&1; \
+	  rm -f $(notdir $<)
+endef
+
+$(BUILDDIR)/%.c: %.f                | $(BUILDDIR) ; $(f2c_translate)
+# cumsum.f: strip OMP directives before f2c sees them (f2c emits unbalanced
+# braces for the c$OMP DO inside c$OMP PARALLEL pattern used here).
+# Routine becomes serial but stays correct.
+$(BUILDDIR)/cumsum.c: $(COM)/cumsum.f | $(BUILDDIR)
+	@$(F2C_PREP) $< | sed -E '/^[cC]\$$/d; /^[cC]\$$OMP/Id' > $(BUILDDIR)/$(notdir $<)
+	@cd $(BUILDDIR) && $(F2C) $(F2CFLAGS) $(notdir $<) >/dev/null 2>&1; \
+	  rm -f $(notdir $<)
+$(BUILDDIR)/%.c: $(COM)/%.f         | $(BUILDDIR) ; $(f2c_translate)
+$(BUILDDIR)/%.c: $(HFMM)/%.f        | $(BUILDDIR) ; $(f2c_translate)
+$(BUILDDIR)/%.c: $(LFMM)/%.f        | $(BUILDDIR) ; $(f2c_translate)
+$(BUILDDIR)/%.c: $(BHFMM)/%.f       | $(BUILDDIR) ; $(f2c_translate)
+$(BUILDDIR)/%.c: $(MBHFMM)/%.f      | $(BUILDDIR) ; $(f2c_translate)
+$(BUILDDIR)/%.c: $(STFMM)/%.f       | $(BUILDDIR) ; $(f2c_translate)
+$(BUILDDIR)/%.c: $(TESTDIR)/helmholtz/%.f           | $(BUILDDIR) ; $(f2c_translate)
+$(BUILDDIR)/%.c: $(TESTDIR)/laplace/%.f             | $(BUILDDIR) ; $(f2c_translate)
+$(BUILDDIR)/%.c: $(TESTDIR)/biharmonic/%.f          | $(BUILDDIR) ; $(f2c_translate)
+$(BUILDDIR)/%.c: $(TESTDIR)/modified-biharmonic/%.f | $(BUILDDIR) ; $(f2c_translate)
+$(BUILDDIR)/%.c: $(TESTDIR)/stokes/%.f              | $(BUILDDIR) ; $(f2c_translate)
+
+# --- compile rules ---------------------------------------------------------
+
+$(BUILDDIR)/%.o: $(BUILDDIR)/%.c
+	$(CC_F2C) $(CFLAGS) -c $< -o $@
+
+
+$(OMP_OBJ): $(OMP_WRAP_C) | $(BUILDDIR)
+	$(CC_F2C) $(CFLAGS) -c $< -o $@
+
+# --- link rules ------------------------------------------------------------
+# Each test binary links against ALL library objects (overprovisioning is
+# safe; the linker drops unused .o aggressively only with --gc-sections).
+
+$(BUILDDIR)/int2-%: $(BUILDDIR)/test_%.o $(LIB_OBJS) $(OMP_OBJ)
+	$(CC_F2C) $(CFLAGS) $(LDFLAGS_EXTRA) -o $@ $^ $(LDLIBS)
+
+# --- run ------------------------------------------------------------------
+
+run: $(TEST_BINS)
+	@rm -f $(BUILDDIR)/print_testres.txt $(BUILDDIR)/*.out RESULTS.f2c
+	@echo "=== Running f2c-translated fmm2d tests ==="
+	@echo "=== Running f2c-translated fmm2d tests ==="  > RESULTS.f2c
+	@date >> RESULTS.f2c
+	@for t in $(TEST_BINS); do \
+	  base=$$(basename $$t); \
+	  out=$(BUILDDIR)/$$base.out; \
+	  ( cd $(BUILDDIR) && OMP_NUM_THREADS=4 OMP_STACKSIZE=64M ./$$base ) \
+	    > $$out 2>&1; \
+	  rc=$$?; \
+	  summary=$$(grep -E 'Successfully completed' $$out | tail -1); \
+	  [ -z "$$summary" ] && summary="(no test-suite summary printed)"; \
+	  if [ $$rc -eq 0 ]; then echo "PASS $$base  $$summary"; \
+	    else echo "FAIL $$base (exit=$$rc)"; fi; \
+	  echo "" >> RESULTS.f2c; \
+	  echo "--- $$base ---" >> RESULTS.f2c; \
+	  cat $$out >> RESULTS.f2c; \
+	  echo "exit=$$rc" >> RESULTS.f2c; \
+	done
+	@echo ""
+	@echo "Aggregate from print_testres.txt:"
+	@grep -E "Successfully completed" $(BUILDDIR)/print_testres.txt | sort -u | sed 's/^/  /'
+	@echo ""
+	@echo "Full per-test stdout in RESULTS.f2c, summary in $(BUILDDIR)/print_testres.txt"
+
+clean:
+	rm -rf $(BUILDDIR) RESULTS.f2c

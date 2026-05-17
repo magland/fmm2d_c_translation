@@ -22,3 +22,6 @@ lib-static/*.a
 GPATH
 GRTAGS
 GTAGS
+# f2c build artifacts
+_f2c_build/
+RESULTS.f2c
