@@ -323,3 +323,19 @@ tests: $(TEST_BINS) $(MBH_TEST_BINS)
 
 clean:
 	rm -rf $(BUILD)
+
+# ---------------------------------------------------------------------------
+# Deterministic transpiler (transpiler/transpile.py): regenerate the C library
+# from the Fortran sources, and verify it against the per-file diff tests and
+# the matlab-path end-to-end smoke tests.
+# ---------------------------------------------------------------------------
+.PHONY: generate transpiler-check transpiler-e2e
+
+generate:
+	bash transpiler/generate.sh
+
+transpiler-check:
+	bash transpiler/run_all.sh
+
+transpiler-e2e:
+	bash transpiler/run_e2e.sh
